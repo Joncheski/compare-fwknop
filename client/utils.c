@@ -60,7 +60,6 @@ int
 verify_file_perms_ownership(const char *file)
 {
     int res = 1;
-    uid_t caller_uid = 0;
 
 #if HAVE_STAT
     struct stat st;
@@ -96,12 +95,10 @@ verify_file_perms_ownership(const char *file)
             */
         }
 
-        caller_uid = getuid();
-        if(st.st_uid != caller_uid)
+        if(st.st_uid != getuid())
         {
-            log_msg(LOG_VERBOSITY_ERROR, "[-] file: %s (owner: %llu) not owned by current effective user id: %llu",
-                file, (unsigned long long)st.st_uid, (unsigned long long)caller_uid);
-
+            log_msg(LOG_VERBOSITY_ERROR, "[-] file: %s not owned by current effective user id",
+                file);
             /* when we start in enforcing this instead of just warning
              * the user
             res = 0;
@@ -151,19 +148,17 @@ get_in_addr(struct sockaddr *sa)
 }
 
 /**
- * @brief  Resolve a domain name as an IP address.
+ * @brief  Resolve a domain name as an ip adress.
  *
  * @param dns_str    Name of the host to resolve.
  * @param hints      Hints to reduce the number of result from getaddrinfo()
  * @param ip_str     String where to store the resolve ip address
  * @param ip_bufsize Number of bytes available in the ip_str buffer
- * @param opts       Client command line options
  *
  * @return 0 if successful, 1 if an error occured.
  */
 int
-resolve_dst_addr(const char *dns_str, struct addrinfo *hints,
-        char *ip_str, size_t ip_bufsize, fko_cli_options_t *opts)
+resolve_dest_adr(const char *dns_str, struct addrinfo *hints, char *ip_str, size_t ip_bufsize)
 {
     int                 error;      /* Function error return code */
     struct addrinfo    *result;     /* Result of getaddrinfo() */
@@ -178,7 +173,7 @@ resolve_dst_addr(const char *dns_str, struct addrinfo *hints,
     /* Try to resolve the host name */
     error = getaddrinfo(dns_str, NULL, hints, &result);
     if (error != 0)
-        fprintf(stderr, "resolve_dst_addr() : %s\n", gai_strerror(error));
+        fprintf(stderr, "resolve_dest_adr() : %s\n", gai_strerror(error));
 
     else
     {
@@ -187,17 +182,6 @@ resolve_dst_addr(const char *dns_str, struct addrinfo *hints,
         /* Go through the linked list of addrinfo structures */
         for (rp = result; rp != NULL; rp = rp->ai_next)
         {
-            /* Apply --server-resolve-ipv4 criteria
-            */
-            if(opts->spa_server_resolve_ipv4)
-            {
-                if(rp->ai_family != AF_INET)
-                {
-                    log_msg(LOG_VERBOSITY_DEBUG, "Non-IPv4 resolution");
-                    continue;
-                }
-            }
-
             memset(ip_str, 0, ip_bufsize);
 #if WIN32 && WINVER <= 0x0600
 			/* On older Windows systems (anything before Vista?),
@@ -211,12 +195,12 @@ resolve_dst_addr(const char *dns_str, struct addrinfo *hints,
             sai_remote = (struct sockaddr_in *)get_in_addr((struct sockaddr *)(rp->ai_addr));
             if (inet_ntop(rp->ai_family, sai_remote, ip_str, ip_bufsize) != NULL)
 #endif
-            {
+			{
                 error = 0;
                 break;
             }
             else
-                log_msg(LOG_VERBOSITY_ERROR, "resolve_dst_addr() : inet_ntop (%d) - %s",
+                log_msg(LOG_VERBOSITY_ERROR, "resolve_dest_adr() : inet_ntop (%d) - %s",
                         errno, strerror(errno));
         }
 

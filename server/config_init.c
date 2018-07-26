@@ -31,13 +31,10 @@
 #include "fwknopd_common.h"
 #include "fwknopd_errors.h"
 #include "config_init.h"
-#include "service.h"
 #include "access.h"
 #include "cmd_opts.h"
 #include "utils.h"
 #include "log_msg.h"
-#include <pthread.h>
-#include <time.h>
 
 #if FIREWALL_FIREWALLD
   #include "fw_util_firewalld.h"
@@ -134,23 +131,6 @@ free_configs(fko_srv_options_t *opts)
 
     free_acc_stanzas(opts);
 
-    destroy_service_table(opts);
-
-    if(opts->acc_stanza_hash_tbl != NULL)
-    {
-        // lock the hash table mutex
-        if(pthread_mutex_lock(&(opts->acc_hash_tbl_mutex)))
-        {
-            log_msg(LOG_ERR, "Mutex lock error.");
-        }
-        else
-        {
-            hash_table_destroy(opts->acc_stanza_hash_tbl);
-            pthread_mutex_unlock(&(opts->acc_hash_tbl_mutex));
-            pthread_mutex_destroy(&(opts->acc_hash_tbl_mutex));
-        }
-    }
-
     for(i=0; i<NUMBER_OF_CONFIG_ENTRIES; i++)
         if(opts->config[i] != NULL)
             free(opts->config[i]);
@@ -177,12 +157,6 @@ validate_int_var_ranges(fko_srv_options_t *opts)
         1, RCHK_MAX_UDPSERV_PORT);
     range_check(opts, "UDPSERV_PORT", opts->config[CONF_UDPSERV_SELECT_TIMEOUT],
         1, RCHK_MAX_UDPSERV_SELECT_TIMEOUT);
-    range_check(opts, "ACC_STANZA_HASH_TABLE_LENGTH", opts->config[CONF_ACC_STANZA_HASH_TABLE_LENGTH],
-        MIN_ACC_STANZA_HASH_TABLE_LENGTH, MAX_ACC_STANZA_HASH_TABLE_LENGTH);
-    range_check(opts, "MAX_WAIT_ACC_DATA", opts->config[CONF_MAX_WAIT_ACC_DATA],
-        1, RCHK_MAX_WAIT_ACC_DATA);
-    range_check(opts, "SERVICE_HASH_TABLE_LENGTH", opts->config[CONF_SERVICE_HASH_TABLE_LENGTH],
-        MIN_SERVICE_HASH_TABLE_LENGTH, MAX_SERVICE_HASH_TABLE_LENGTH);
 
 #if FIREWALL_IPFW
     range_check(opts, "IPFW_START_RULE_NUM", opts->config[CONF_IPFW_START_RULE_NUM],
@@ -419,18 +393,6 @@ validate_options(fko_srv_options_t *opts)
     */
     if(opts->config[CONF_ACCESS_FILE] == NULL)
         set_config_entry(opts, CONF_ACCESS_FILE, DEF_ACCESS_FILE);
-
-    /* If no last_conn_id.conf path was specified on the command line or set in
-     * the config file, use the default.
-    */
-    if(opts->config[CONF_CONN_ID_FILE] == NULL)
-        set_config_entry(opts, CONF_CONN_ID_FILE, DEF_CONN_ID_FILE);
-
-    /* If connection report interval was not specified on the command line or set in
-     * the config file, use the default.
-    */
-    if(opts->config[CONF_CONN_REPORT_INTERVAL] == NULL)
-        set_config_entry(opts, CONF_CONN_REPORT_INTERVAL, DEF_CONN_REPORT_INTERVAL);
 
     /* If the pid and digest cache files where not set in the config file or
      * via command-line, then grab the defaults. Start with RUN_DIR as the
@@ -973,103 +935,6 @@ validate_options(fko_srv_options_t *opts)
     if(opts->config[CONF_SYSLOG_FACILITY] == NULL)
         set_config_entry(opts, CONF_SYSLOG_FACILITY, DEF_SYSLOG_FACILITY);
 
-    /* SDP Mode
-    */
-    if(opts->config[CONF_DISABLE_SDP_MODE] == NULL)
-    {
-        set_config_entry(opts, CONF_DISABLE_SDP_MODE, DEF_DISABLE_SDP_MODE);
-    }
-    else if(
-            strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "N", 1) != 0  &&
-            strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "Y", 1) != 0
-           )
-    {
-        log_msg(LOG_ERR, "[*] var DISABLE_SDP_MODE value '%s' not accepted, must be Y or N",
-                opts->config[CONF_DISABLE_SDP_MODE]);
-        clean_exit(opts, NO_FW_CLEANUP, EXIT_FAILURE);
-    }
-
-    /* SDP Mode
-    */
-    if(opts->config[CONF_ALLOW_LEGACY_ACCESS_REQUESTS] == NULL)
-    {
-        set_config_entry(opts, CONF_ALLOW_LEGACY_ACCESS_REQUESTS, DEF_ALLOW_LEGACY_ACCESS_REQUESTS);
-    }
-    else if(
-            strncasecmp(opts->config[CONF_ALLOW_LEGACY_ACCESS_REQUESTS], "N", 1) != 0  &&
-            strncasecmp(opts->config[CONF_ALLOW_LEGACY_ACCESS_REQUESTS], "Y", 1) != 0
-           )
-    {
-        log_msg(LOG_ERR, "[*] var ALLOW_LEGACY_ACCESS_REQUESTS value '%s' not accepted, must be Y or N",
-                opts->config[CONF_ALLOW_LEGACY_ACCESS_REQUESTS]);
-        clean_exit(opts, NO_FW_CLEANUP, EXIT_FAILURE);
-    }
-
-    /* Access Stanza Hash Table Length
-     */
-    if(opts->config[CONF_ACC_STANZA_HASH_TABLE_LENGTH] == NULL)
-    {
-        set_config_entry(opts, CONF_ACC_STANZA_HASH_TABLE_LENGTH, DEF_ACC_HASH_TABLE_LENGTH_STR);
-    }
-
-    if(opts->config[CONF_SERVICE_HASH_TABLE_LENGTH] == NULL)
-    {
-        set_config_entry(opts, CONF_SERVICE_HASH_TABLE_LENGTH, DEF_SERVICE_HASH_TABLE_LENGTH_STR);
-    }
-
-    if(strncmp(opts->config[CONF_DISABLE_SDP_MODE], "N", 1) == 0)
-    {
-        // initialize the hash table mutexes
-        pthread_mutex_init(&(opts->acc_hash_tbl_mutex), NULL);
-        pthread_mutex_init(&(opts->service_hash_tbl_mutex), NULL);
-    }
-
-    if(opts->config[CONF_DISABLE_SDP_CTRL_CLIENT] == NULL)
-    {
-        if(strncmp(opts->config[CONF_DISABLE_SDP_MODE], "N", 1) == 0)
-        {
-            set_config_entry(opts, CONF_DISABLE_SDP_CTRL_CLIENT, DEF_DISABLE_SDP_CTRL_CLIENT);
-        }
-        else
-        {
-            set_config_entry(opts, CONF_DISABLE_SDP_CTRL_CLIENT, "Y");
-        }
-    }
-    else if(strncmp(opts->config[CONF_DISABLE_SDP_MODE], "Y", 1) == 0)
-    {
-        set_config_entry(opts, CONF_DISABLE_SDP_CTRL_CLIENT, "Y");
-    }
-
-    if(opts->config[CONF_DISABLE_CONNECTION_TRACKING] == NULL)
-    {
-        if(strncmp(opts->config[CONF_DISABLE_SDP_CTRL_CLIENT], "N", 1) == 0)
-        {
-            set_config_entry(opts, CONF_DISABLE_CONNECTION_TRACKING, DEF_DISABLE_CONNECTION_TRACKING);
-        }
-        else
-        {
-            set_config_entry(opts, CONF_DISABLE_CONNECTION_TRACKING, "Y");
-        }
-    }
-
-    if(opts->config[CONF_MAX_WAIT_ACC_DATA] == NULL)
-    {
-        set_config_entry(opts, CONF_MAX_WAIT_ACC_DATA, DEF_MAX_WAIT_ACC_DATA);
-    }
-
-    if(strncmp(opts->config[CONF_DISABLE_SDP_CTRL_CLIENT], "N", 1) == 0)
-    {
-        // config file path must be set, no default
-        if(opts->config[CONF_SDP_CTRL_CLIENT_CONF] == NULL)
-        {
-            log_msg(LOG_ERR,
-                "Invalid configuration: the file path SDP_CTRL_CLIENT_CONF "
-                "must be defined when SDP mode and the SDP control client "
-                "are enabled"
-            );
-            clean_exit(opts, NO_FW_CLEANUP, EXIT_FAILURE);
-        }
-    }
 
     /* Validate integer variable ranges
     */
@@ -1337,12 +1202,6 @@ config_init(fko_srv_options_t *opts, int argc, char **argv)
             case 'a':
                 set_config_entry(opts, CONF_ACCESS_FILE, optarg);
                 break;
-            case ACC_STANZA_HASH_TABLE_LENGTH:
-                set_config_entry(opts, CONF_ACC_STANZA_HASH_TABLE_LENGTH, optarg);
-                break;
-            case SERVICE_HASH_TABLE_LENGTH:
-                set_config_entry(opts, CONF_SERVICE_HASH_TABLE_LENGTH, optarg);
-                break;
             case 'c':
                 /* This was handled earlier */
                 break;
@@ -1357,9 +1216,6 @@ config_init(fko_srv_options_t *opts, int argc, char **argv)
                     clean_exit(opts, NO_FW_CLEANUP, EXIT_FAILURE);
                 }
                 break;
-            case CONFIG_DUMP_OUTPUT_PATH:
-                set_config_entry(opts, CONF_CONFIG_DUMP_OUTPUT_PATH, optarg);
-                break;
             case 'd':
 #if USE_FILE_CACHE
                 set_config_entry(opts, CONF_DIGEST_FILE, optarg);
@@ -1369,33 +1225,6 @@ config_init(fko_srv_options_t *opts, int argc, char **argv)
                 break;
             case 'D':
                 opts->dump_config = 1;
-                break;
-            case DISABLE_SDP_MODE:
-                set_config_entry(opts, CONF_DISABLE_SDP_MODE, "Y");
-                break;
-            case ALLOW_LEGACY_ACCESS_REQUESTS:
-                set_config_entry(opts, CONF_ALLOW_LEGACY_ACCESS_REQUESTS, "Y");
-                break;
-            case DISABLE_SDP_CTRL_CLIENT:
-                set_config_entry(opts, CONF_DISABLE_SDP_CTRL_CLIENT, "Y");
-                break;
-            case DISABLE_CONNECTION_TRACKING:
-                set_config_entry(opts, CONF_DISABLE_CONNECTION_TRACKING, "Y");
-                break;
-            case CONN_ID_FILE:
-                set_config_entry(opts, CONF_CONN_ID_FILE, optarg);
-                break;
-            case CONF_CONN_REPORT_INTERVAL:
-                set_config_entry(opts, CONF_CONN_REPORT_INTERVAL, optarg);
-                break;
-            case MAX_WAIT_ACC_DATA:
-                set_config_entry(opts, CONF_MAX_WAIT_ACC_DATA, optarg);
-                break;
-            case SDP_CTRL_CLIENT_CONF:
-                set_config_entry(opts, CONF_SDP_CTRL_CLIENT_CONF, optarg);
-                break;
-            case FWKNOP_CLIENT_CONF:
-                set_config_entry(opts, CONF_FWKNOP_CLIENT_CONF, optarg);
                 break;
             case DUMP_SERVER_ERR_CODES:
                 dump_server_errors();
@@ -1539,48 +1368,18 @@ void
 dump_config(const fko_srv_options_t *opts)
 {
     int i;
-    int opened = 0;
-    FILE *dest = NULL;
-    time_t curtime = time(NULL);
-    struct tm *loctime = localtime(&curtime);
 
-    if(opts->config[CONF_CONFIG_DUMP_OUTPUT_PATH] != NULL &&
-       opts->foreground == 0)
-    {
-        dest = fopen(opts->config[CONF_CONFIG_DUMP_OUTPUT_PATH], "a");
-        if(dest == NULL)
-        {
-            fprintf(stderr, "ERROR opening file for dump_config output: %s\n",
-                    opts->config[CONF_CONFIG_DUMP_OUTPUT_PATH]);
-            dest = stdout;
-        }
-        else
-        {
-            opened = 1;
-        }
-    }
-    else
-    {
-        dest = stdout;
-    }
-
-    fprintf(dest, "\n\n\n%s", asctime(loctime));
-    fprintf(dest, "Current fwknopd config settings:\n");
+    fprintf(stdout, "Current fwknopd config settings:\n");
 
     for(i=0; i<NUMBER_OF_CONFIG_ENTRIES; i++)
-        fprintf(dest, "%3i. %-28s =  '%s'\n",
+        fprintf(stdout, "%3i. %-28s =  '%s'\n",
             i,
             config_map[i],
             (opts->config[i] == NULL) ? "<not set>" : opts->config[i]
         );
 
-    fprintf(dest, "\n");
-    fflush(dest);
-
-    if(opened)
-    {
-        fclose(dest);
-    }
+    fprintf(stdout, "\n");
+    fflush(stdout);
 }
 
 /* Print usage message...

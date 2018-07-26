@@ -902,11 +902,9 @@ fw_config_init(fko_srv_options_t * const opts)
         if(set_fw_chain_conf(FIREWD_OUTPUT_ACCESS, opts->config[CONF_FIREWD_OUTPUT_ACCESS]) != 1)
             return 0;
 
-    /* The remaining access chains require ENABLE_FIREWD_FORWARDING
-     * or ENABLE_FIREWD_LOCAL_NAT
+    /* The remaining access chains require ENABLE_FIREWD_FORWARDING = Y
     */
-    if(strncasecmp(opts->config[CONF_ENABLE_FIREWD_FORWARDING], "Y", 1)==0
-            || strncasecmp(opts->config[CONF_ENABLE_FIREWD_LOCAL_NAT], "Y", 1)==0)
+    if(strncasecmp(opts->config[CONF_ENABLE_FIREWD_FORWARDING], "Y", 1)==0)
     {
         if(set_fw_chain_conf(FIREWD_FORWARD_ACCESS, opts->config[CONF_FIREWD_FORWARD_ACCESS]) != 1)
             return 0;
@@ -1401,8 +1399,7 @@ process_spa_request(const fko_srv_options_t * const opts,
             }
         }
 
-        if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG
-                || spadat->message_type == FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCESS_MSG)
+        if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG)
         {
             firewd_rule(opts, NULL, FIREWD_RULE_ARGS, spadat->use_src_ip,
                 (fwc.use_destination ? spadat->pkt_destination_ip : FIREWD_ANY_IP),

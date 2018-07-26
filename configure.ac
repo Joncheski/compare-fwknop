@@ -120,10 +120,6 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_LIBTOOL
 
-dnl Detect if we are on and Apple platform
-dnl
-AM_CONDITIONAL([APPLE_PLATFORM], [test `uname -s` = Darwin])
-
 dnl Decide whether or not to build binaries with profiling coverage support
 dnl
 want_profile_coverage=no
@@ -179,25 +175,12 @@ dnl
 want_asan_support=no
 AC_ARG_ENABLE([asan-support],
   [AS_HELP_STRING([--enable-asan-support],
-    [Build fwknop binaries with AddressSanitizer support @<:@default is to disable@:>@])],
+    [Build fwknop binaries with address sanitizer support @<:@default is to disable@:>@])],
   [want_asan_support=$enableval],
   [])
 
 if test "x$want_asan_support" = "xyes"; then
     FKO_CHECK_COMPILER_ARG([-fsanitize=address -fno-omit-frame-pointer])
-fi
-
-dnl Decide whether or not to enable MemorySanitizer support
-dnl
-want_ubsan_support=no
-AC_ARG_ENABLE([ubsan-support],
-  [AS_HELP_STRING([--enable-ubsan-support],
-    [Build fwknop binaries with UndefinedBehaviorSanitizer support @<:@default is to disable@:>@])],
-  [want_ubsan_support=$enableval],
-  [])
-
-if test "x$want_ubsan_support" = "xyes"; then
-    FKO_CHECK_COMPILER_ARG([-fsanitize=undefined])
 fi
 
 dnl Decide whether or not force 32-bit mode
@@ -295,8 +278,8 @@ AC_ARG_ENABLE([pie],
   [])
 
 if test "x$use_pie" = "xyes"; then
-    FKO_CHECK_COMPILER_ARG([-fPIE -fPIC])
-    FKO_CHECK_COMPILER_ARG_LDFLAGS_ONLY([-pie -fPIC])
+    FKO_CHECK_COMPILER_ARG([-fPIE])
+    FKO_CHECK_COMPILER_ARG_LDFLAGS_ONLY([-pie])
 fi
 
 dnl Decide whether or not to enable -D_FORTIFY_SOURCE support
@@ -525,38 +508,6 @@ AS_IF([test "x$WGET_EXE" != x],
     wget_exe=$WGET_EXE
   ], [ wget_exe="(not found)"]
 )
-
-dnl Check for ssl
-dnl
-AC_CHECK_HEADER(openssl/ssl.h, , [ AC_MSG_ERROR( [did not find openssl/ssl.h] ) ] )
-AC_SEARCH_LIBS([SSL_library_init], [ssl],
-  ,
-  [ AC_MSG_ERROR([libfko needs ssl])]
-)
-
-dnl Check for crypto
-dnl
-AC_SEARCH_LIBS([X509_get_subject_name], [crypto],
-  ,
-  [ AC_MSG_ERROR([libfko needs crypto])]
-)
-
-dnl Check for json
-dnl
-AC_CHECK_HEADER(json-c/json.h, , [ AC_MSG_ERROR( [did not find json-c/json.h] ) ] )
-AC_SEARCH_LIBS([json_tokener_parse], [json0, json-c],
-  ,
-  [ AC_MSG_ERROR([libfko and fwknopd need json-c (libjson0 and libjson0-dev on linux)])]
-)
-
-dnl THIS NEEDS FIXING TO HANDLE WINDOWS
-dnl Check for pthread
-dnl
-AC_SEARCH_LIBS([pthread_create], [pthread], 
-  ,
-  [ AC_MSG_ERROR([libfko and fwknopd need pthread]) ]
-)
-  
 
 dnl Check for libpcap, gdbm (or ndbm) if we are building the server component
 dnl
@@ -805,6 +756,7 @@ AC_CONFIG_FILES([Makefile
                  client/Makefile
                  server/Makefile
                  common/Makefile
+                 test/c-unit-tests/Makefile
                  doc/Makefile])
 
 AC_OUTPUT

@@ -31,9 +31,6 @@
 #include "fwknopd_common.h"
 #include "log_msg.h"
 #include "sig_handler.h"
-#include "service.h"
-#include "access.h"
-#include "config_init.h"
 
 #if HAVE_SYS_WAIT_H
   #include <sys/wait.h>
@@ -152,7 +149,7 @@ set_sig_handlers(void)
 }
 
 int
-sig_do_stop(fko_srv_options_t * const opts)
+sig_do_stop(void)
 {
     /* Any signal except USR1, USR2, and SIGCHLD mean break the loop.
     */
@@ -162,20 +159,11 @@ sig_do_stop(fko_srv_options_t * const opts)
         {
             return 1;
         }
-        else if(got_sigusr1)
+        else if(got_sigusr1 || got_sigusr2)
         {
-            log_msg(LOG_INFO, "Got SIGUSR1. Dumping config...");
-            got_sigusr1 = 0;
-            got_signal = 0;
-            dump_config(opts);
-            dump_service_list(opts);
-            dump_access_list(opts);
-        }
-        else if(got_sigusr2)
-        {
-            /* Not doing anything with this yet.
+            /* Not doing anything with these yet.
             */
-            got_sigusr2 = 0;
+            got_sigusr1 = got_sigusr2 = 0;
             got_signal = 0;
         }
         else

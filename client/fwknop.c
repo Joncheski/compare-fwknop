@@ -30,8 +30,6 @@
 #include "spa_comm.h"
 #include "utils.h"
 #include "getpasswd.h"
-#include "sdp_ctrl_client.h"
-
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -56,7 +54,6 @@ static int set_access_buf(fko_ctx_t ctx, fko_cli_options_t *options,
 static int get_rand_port(fko_ctx_t ctx);
 int resolve_ip_https(fko_cli_options_t *options);
 int resolve_ip_http(fko_cli_options_t *options);
-static pid_t run_sdp_ctrl_client(fko_cli_options_t *options);
 static void clean_exit(fko_ctx_t ctx, fko_cli_options_t *opts,
     char *key, int *key_len, char *hmac_key, int *hmac_key_len,
     unsigned int exit_status);
@@ -167,7 +164,6 @@ main(int argc, char **argv)
     int                 key_len = 0, orig_key_len = 0, hmac_key_len = 0, enc_mode;
     int                 tmp_port = 0;
     char                dump_buf[CTX_DUMP_BUFSIZE];
-    uint32_t            sdp_id = 0;
 
     fko_cli_options_t   options;
 
@@ -179,8 +175,6 @@ main(int argc, char **argv)
     /* Handle command line
     */
     config_init(&options, argc, argv);
-
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : completed config_init");
 
 #if HAVE_LIBFIU
         /* Set any fault injection points early
@@ -303,17 +297,15 @@ main(int argc, char **argv)
             }
         }
 
-       /* Set a message string by combining the allow IP and either
-        * service IDs or port/protocol.  The fwknopd server allows no
-        * service or port/protocol to be specified as well, so in this
-        * case append the string "none/0" to the allow IP.
+        /* Set a message string by combining the allow IP and the
+         * port/protocol.  The fwknopd server allows no port/protocol
+         * to be specified as well, so in this case append the string
+         * "none/0" to the allow IP.
         */
         if(set_access_buf(ctx, &options, access_buf) != 1)
             clean_exit(ctx, &options, key, &key_len,
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
-
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_set_spa_message...");
     res = fko_set_spa_message(ctx, access_buf);
     if(res != FKO_SUCCESS)
     {
@@ -321,14 +313,11 @@ main(int argc, char **argv)
         clean_exit(ctx, &options, key, &key_len,
             hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_set_spa_message");
 
-    /* Set NAT access string if service IDs were not requested
+    /* Set NAT access string
     */
-    if (options.service_ids_str[0] == 0x0 &&
-       (options.nat_local || options.nat_access_str[0] != 0x0))
+    if (options.nat_local || options.nat_access_str[0] != 0x0)
     {
-        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling set_nat_access...");
         res = set_nat_access(ctx, &options, access_buf);
         if(res != FKO_SUCCESS)
         {
@@ -336,7 +325,6 @@ main(int argc, char **argv)
             clean_exit(ctx, &options, key, &key_len,
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
         }
-        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from set_nat_access");
     }
 
     /* Set username
@@ -351,33 +339,6 @@ main(int argc, char **argv)
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
         }
     }
-
-    /* Set SDP mode on or off
-     */
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : checking option disable_sdp_mode...");
-    if(options.disable_sdp_mode)
-    {
-        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_set_disable_sdp_mode...");
-        res = fko_set_disable_sdp_mode(ctx, options.disable_sdp_mode);
-        if(res != FKO_SUCCESS)
-        {
-            errmsg("fko_set_disable_sdp_mode", res);
-            clean_exit(ctx, &options, key, &key_len,
-                    hmac_key, &hmac_key_len, EXIT_FAILURE);
-        }
-        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_set_disable_sdp_mode");
-    }
-    else
-    {
-        res = fko_set_sdp_id(ctx, options.sdp_id);
-        if(res != FKO_SUCCESS)
-        {
-            errmsg("fko_set_sdp_id", res);
-            clean_exit(ctx, &options, key, &key_len,
-                    hmac_key, &hmac_key_len, EXIT_FAILURE);
-        }
-    }
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : finished checking option disable_sdp_mode");
 
     /* Set up for using GPG if specified.
     */
@@ -507,7 +468,6 @@ main(int argc, char **argv)
 
     /* Finalize the context data (encrypt and encode the SPA data)
     */
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_spa_data_final...");
     res = fko_spa_data_final(ctx, key, key_len, hmac_key, hmac_key_len);
     if(res != FKO_SUCCESS)
     {
@@ -518,7 +478,6 @@ main(int argc, char **argv)
         clean_exit(ctx, &options, key, &orig_key_len,
                 hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_spa_data_final");
 
     /* Display the context data.
     */
@@ -565,21 +524,6 @@ main(int argc, char **argv)
     }
 
     res = send_spa_packet(ctx, &options);
-
-    // before checking result of the packet send, start the SDP control
-    // client if configured to do so
-    if( !options.disable_sdp_ctrl_client
-            //&& options.sdp_ctrl_client_config_file != NULL
-            && options.sdp_ctrl_client_config_file[0] != '\0')
-    {
-        if(run_sdp_ctrl_client(&options) == 0)
-        {
-            // this is the child process, stop here
-            clean_exit(ctx, &options, key, &orig_key_len,
-                    hmac_key, &hmac_key_len, EXIT_SUCCESS);
-        }
-    }
-
     if(res < 0)
     {
         log_msg(LOG_VERBOSITY_ERROR, "send_spa_packet: packet not sent.");
@@ -633,20 +577,8 @@ main(int argc, char **argv)
          * This also verifies the HMAC and truncates it if there are no
          * problems.
         */
-        res = fko_get_sdp_id(ctx, &sdp_id);
-        if(res != FKO_SUCCESS)
-        {
-            errmsg("fko_get_sdp_id", res);
-            if(fko_destroy(ctx2) == FKO_ERROR_ZERO_OUT_DATA)
-                log_msg(LOG_VERBOSITY_ERROR,
-                        "[*] Could not zero out sensitive data buffer.");
-            ctx2 = NULL;
-            clean_exit(ctx, &options, key, &orig_key_len,
-                hmac_key, &hmac_key_len, EXIT_FAILURE);
-        }
-
         res = fko_new_with_data(&ctx2, spa_data, NULL,
-            0, enc_mode, hmac_key, hmac_key_len, options.hmac_type, sdp_id);
+            0, enc_mode, hmac_key, hmac_key_len, options.hmac_type);
         if(res != FKO_SUCCESS)
         {
             errmsg("fko_new_with_data", res);
@@ -734,8 +666,6 @@ main(int argc, char **argv)
 
     clean_exit(ctx, &options, key, &orig_key_len,
             hmac_key, &hmac_key_len, EXIT_SUCCESS);
-
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : Supposedly exiting successfully, code is: %d", EXIT_SUCCESS);
 
     return EXIT_SUCCESS;  /* quiet down a gcc warning */
 }
@@ -838,12 +768,7 @@ set_access_buf(fko_ctx_t ctx, fko_cli_options_t *options, char *access_buf)
     char   *ndx = NULL, tmp_nat_port[MAX_PORT_STR_LEN+1] = {0};
     int     nat_port = 0;
 
-    if(options->service_ids_str[0] != 0x0)
-    {
-        snprintf(access_buf, MAX_LINE_LEN, "%s%s%s",
-                options->allow_ip_str, ",", options->service_ids_str);
-    }
-    else if(options->access_str[0] != 0x0)
+    if(options->access_str[0] != 0x0)
     {
         if (options->nat_rand_port)
         {
@@ -974,8 +899,7 @@ set_nat_access(fko_ctx_t ctx, fko_cli_options_t *options, const char * const acc
          * family to either AF_INET or AF_INET6 */
         hints.ai_family = AF_INET;
 
-        if (resolve_dst_addr(hostname, &hints,
-                    dst_ip_str, sizeof(dst_ip_str), options) != 0)
+        if (resolve_dest_adr(hostname, &hints, dst_ip_str, sizeof(dst_ip_str)) != 0)
         {
             log_msg(LOG_VERBOSITY_ERROR, "[*] Unable to resolve %s as an ip address",
                     hostname);
@@ -1175,14 +1099,7 @@ set_message_type(fko_ctx_t ctx, fko_cli_options_t *options)
 {
     short message_type;
 
-    if(options->service_ids_str[0] != 0x0)
-    {
-    	if (options->fw_timeout >= 0)
-    		message_type = FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG;
-    	else
-    		message_type = FKO_SERVICE_ACCESS_MSG;
-    }
-    else if(options->server_command[0] != 0x0)
+    if(options->server_command[0] != 0x0)
     {
         message_type = FKO_COMMAND_MSG;
     }
@@ -1429,71 +1346,6 @@ enable_fault_injections(fko_cli_options_t * const opts)
 }
 #endif
 
-/* Run the SDP Control Client
- */
-static pid_t
-run_sdp_ctrl_client(fko_cli_options_t *options)
-{
-    pid_t child_pid = -1;
-    sdp_ctrl_client_t client = NULL;
-
-    int rv = sdp_ctrl_client_new(options->sdp_ctrl_client_config_file,
-                options->rc_file, 1, &client);
-
-    if(rv != SDP_SUCCESS)
-    {
-        log_msg(LOG_VERBOSITY_ERROR, "sdp_ctrl_client_new failed, returned error code: %d\n", rv);
-        return child_pid;
-    }
-
-    sdp_ctrl_client_describe(client);
-
-    rv = sdp_ctrl_client_start(client, &child_pid);
-
-    if(client->foreground)
-    {
-        if(rv != SDP_SUCCESS)
-            log_msg(LOG_VERBOSITY_ERROR, "SDP ctrl client returned error code: %d", rv);
-        else
-            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client ran successfully");
-
-        sdp_ctrl_client_destroy(client);
-
-        // since running in foreground, this is the main
-        // fwknop process, so return to complete other tasks
-        return child_pid;
-    }
-
-    if(child_pid >= 0)
-    {
-        if(child_pid == 0)
-        {
-            // I'm a child, thus I'm the ctrl_client process
-            // If I've returned, I've exited my action loop
-            // Don't execute any further
-
-            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client child process loop has returned.");
-            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client child process return value: %d", rv);
-        }
-        else
-        {
-            // I'm the parent
-            log_msg(LOG_VERBOSITY_INFO, "Parent process returned from sdp_ctrl_client_start. \n");
-            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client return value: %d\n", rv);
-        }
-    }
-    else
-    {
-        // fork failed
-        log_msg(LOG_VERBOSITY_ERROR, "sdp_ctrl_client_start did not fork, returned error: %d", rv);
-    }
-
-    // parent or child, always free the context
-    sdp_ctrl_client_destroy(client);
-
-    return child_pid;
-}
-
 /* free up memory and exit
 */
 static void
@@ -1515,7 +1367,6 @@ clean_exit(fko_ctx_t ctx, fko_cli_options_t *opts,
     zero_buf_wrapper(hmac_key, *hmac_key_len);
     *key_len = 0;
     *hmac_key_len = 0;
-    log_msg(LOG_VERBOSITY_DEBUG, "fwknop clean_exit() : Supposedly exiting successfully, code is: %d", exit_status);
     exit(exit_status);
 }
 

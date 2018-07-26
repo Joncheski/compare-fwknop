@@ -33,7 +33,6 @@
 #include "incoming_spa.h"
 #include "log_msg.h"
 #include "fw_util.h"
-#include "cmd_cycle.h"
 #include "utils.h"
 #include <errno.h>
 
@@ -146,7 +145,7 @@ run_udp_server(fko_srv_options_t *opts)
     */
     while(1)
     {
-        if(sig_do_stop(opts))
+        if(sig_do_stop())
         {
             if(opts->verbose)
                 log_msg(LOG_INFO,
@@ -154,28 +153,21 @@ run_udp_server(fko_srv_options_t *opts)
             break;
         }
 
+        /* Check for any expired firewall rules and deal with them.
+        */
         if(!opts->test)
         {
-            /* Check for any expired firewall rules and deal with them.
-            */
-            if(opts->enable_fw)
+            if(rules_chk_threshold > 0)
             {
-                if(rules_chk_threshold > 0)
+                opts->check_rules_ctr++;
+                if ((opts->check_rules_ctr % rules_chk_threshold) == 0)
                 {
-                    opts->check_rules_ctr++;
-                    if ((opts->check_rules_ctr % rules_chk_threshold) == 0)
-                    {
-                        chk_rm_all = 1;
-                        opts->check_rules_ctr = 0;
-                    }
+                    chk_rm_all = 1;
+                    opts->check_rules_ctr = 0;
                 }
-                check_firewall_rules(opts, chk_rm_all);
-                chk_rm_all = 0;
             }
-
-            /* See if any CMD_CYCLE_CLOSE commands need to be executed.
-            */
-            cmd_cycle_close(opts);
+            check_firewall_rules(opts, chk_rm_all);
+            chk_rm_all = 0;
         }
 
         /* Initialize and setup the socket for select.
@@ -220,18 +212,20 @@ run_udp_server(fko_srv_options_t *opts)
         pkt_len = recvfrom(s_sock, dgram_msg, MAX_SPA_PACKET_LEN,
                 0, (struct sockaddr *)&caddr, &clen);
 
-        if(pkt_len > 0 && pkt_len <= MAX_SPA_PACKET_LEN)
+        dgram_msg[pkt_len] = 0x0;
+
+        if(opts->verbose)
         {
-            dgram_msg[pkt_len] = 0x0;
+            memset(sipbuf, 0x0, MAX_IPV4_STR_LEN);
+            inet_ntop(AF_INET, &(caddr.sin_addr.s_addr), sipbuf, MAX_IPV4_STR_LEN);
+            log_msg(LOG_INFO, "udp_server: Got UDP datagram (%d bytes) from: %s",
+                    pkt_len, sipbuf);
+        }
 
-            if(opts->verbose)
-            {
-                memset(sipbuf, 0x0, MAX_IPV4_STR_LEN);
-                inet_ntop(AF_INET, &(caddr.sin_addr.s_addr), sipbuf, MAX_IPV4_STR_LEN);
-                log_msg(LOG_INFO, "udp_server: Got UDP datagram (%d bytes) from: %s",
-                        pkt_len, sipbuf);
-            }
-
+        /* Expect the data to not be too large
+        */
+        if(pkt_len <= MAX_SPA_PACKET_LEN)
+        {
             /* Copy the packet for SPA processing
             */
             strlcpy((char *)opts->spa_pkt.packet_data, dgram_msg, pkt_len+1);
@@ -241,7 +235,6 @@ run_udp_server(fko_srv_options_t *opts)
             opts->spa_pkt.packet_dst_ip   = saddr.sin_addr.s_addr;
             opts->spa_pkt.packet_src_port = ntohs(caddr.sin_port);
             opts->spa_pkt.packet_dst_port = ntohs(saddr.sin_port);
-            opts->spa_pkt.sdp_id   = 0;
 
             incoming_spa(opts);
         }

@@ -313,15 +313,14 @@ init_ctx_with_data(PyObject *self, PyObject *args)
     char *hmac_key;
     int hmac_key_len;
     int hmac_type;
-    int sdp_id;
     int res;
 
     if(!PyArg_ParseTuple(args, "ss#is#", &spa_data, &dec_key, &dec_key_len,
-                         &enc_mode, &hmac_key, &hmac_key_len, &hmac_type, &sdp_id))
+                         &enc_mode, &hmac_key, &hmac_key_len, &hmac_type))
         return NULL;
 
     res = fko_new_with_data(&ctx, spa_data, dec_key, dec_key_len, enc_mode,
-                            hmac_key, hmac_key_len, hmac_type, (uint32_t)sdp_id);
+                            hmac_key, hmac_key_len, hmac_type);
 
     if(res != FKO_SUCCESS)
     {

@@ -90,8 +90,6 @@
   #endif
 #endif
 
-#include <inttypes.h>
-
 /* Work out endianess (sp?)
 */
 #if HAVE_ENDIAN_H       /* Should cover most Linux systems */

@@ -134,19 +134,7 @@ static char *config_map[NUMBER_OF_CONFIG_ENTRIES] = {
 #if AFL_FUZZING
     "AFL_PKT_FILE",
 #endif
-    "FAULT_INJECTION_TAG",
-	"DISABLE_SDP_MODE",
-	"ALLOW_LEGACY_ACCESS_REQUESTS",
-	"ACC_STANZA_HASH_TABLE_LENGTH",
-	"SERVICE_HASH_TABLE_LENGTH",
-	"DISABLE_SDP_CTRL_CLIENT",
-	"DISABLE_CONNECTION_TRACKING",
-	"CONN_ID_FILE",
-	"CONN_REPORT_INTERVAL",
-	"MAX_WAIT_ACC_DATA",
-	"SDP_CTRL_CLIENT_CONF",
-	"FWKNOP_CLIENT_CONF",
-	"CONFIG_DUMP_OUTPUT_PATH"
+    "FAULT_INJECTION_TAG"
 };
 
 
@@ -173,18 +161,6 @@ enum {
     DUMP_SERVER_ERR_CODES,
     EXIT_AFTER_PARSE_CONFIG,
     FAULT_INJECTION_TAG,
-    DISABLE_SDP_MODE,
-	ALLOW_LEGACY_ACCESS_REQUESTS,
-	ACC_STANZA_HASH_TABLE_LENGTH,
-	SERVICE_HASH_TABLE_LENGTH,
-	DISABLE_SDP_CTRL_CLIENT,
-	DISABLE_CONNECTION_TRACKING,
-	CONN_ID_FILE,
-	CONN_REPORT_INTERVAL,
-	MAX_WAIT_ACC_DATA,
-	SDP_CTRL_CLIENT_CONF,
-	FWKNOP_CLIENT_CONF,
-	CONFIG_DUMP_OUTPUT_PATH,
     NOOP /* Just to be a marker for the end */
 };
 
@@ -197,22 +173,11 @@ enum {
 static struct option cmd_opts[] =
 {
     {"access-file",          1, NULL, 'a'},
-	{"acc-hash-tbl-len",     1, NULL, ACC_STANZA_HASH_TABLE_LENGTH },
-	{"service-hash-tbl-len", 1, NULL, SERVICE_HASH_TABLE_LENGTH },
     {"afl-fuzzing",          0, NULL, 'A'},
     {"afl-pkt-file",         1, NULL, AFL_PKT_FILE },
     {"config-file",          1, NULL, 'c'},
     {"packet-limit",         1, NULL, 'C'},
     {"digest-file",          1, NULL, 'd'},
-    {"disable-sdp",          0, NULL, DISABLE_SDP_MODE},
-    {"allow-legacy-spa",     0, NULL, ALLOW_LEGACY_ACCESS_REQUESTS},
-	{"disable-ctrl-client",  0, NULL, DISABLE_SDP_CTRL_CLIENT},
-    {"disable-conn-track",   0, NULL, DISABLE_CONNECTION_TRACKING},
-	{"conn-id-file",         1, NULL, CONN_ID_FILE},
-	{"conn-report_interval", 1, NULL, CONN_REPORT_INTERVAL},
-	{"max-acc-wait",         1, NULL, MAX_WAIT_ACC_DATA},
-	{"ctrl-client-conf",     1, NULL, SDP_CTRL_CLIENT_CONF},
-	{"fwknop-client-conf",   1, NULL, FWKNOP_CLIENT_CONF},
     {"dump-config",          0, NULL, 'D'},
     {"dump-serv-err-codes",  0, NULL, DUMP_SERVER_ERR_CODES },
     {"exit-parse-config",    0, NULL, EXIT_AFTER_PARSE_CONFIG },

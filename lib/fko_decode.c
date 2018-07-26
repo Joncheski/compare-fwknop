@@ -33,10 +33,8 @@
 #include "cipher_funcs.h"
 #include "base64.h"
 #include "digest.h"
-#include "dbg.h"
 
 #define FIELD_PARSERS 9
-#define SDP_FIELD_PARSERS 6
 
 /* Char used to separate SPA fields in an SPA packet */
 #define SPA_FIELD_SEPARATOR    ":"
@@ -193,15 +191,6 @@ parse_msg(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
         {
             return(FKO_ERROR_INVALID_DATA_DECODE_MESSAGE_VALIDFAIL);
         }
-    }
-    else if(ctx->message_type == FKO_SERVICE_ACCESS_MSG ||
-    		ctx->message_type == FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG)
-    {
-    	// Require a message like: 1.2.3.4,12,53
-    	if(validate_service_access_msg(ctx->message) != FKO_SUCCESS)
-    	{
-    		return(FKO_ERROR_INVALID_DATA_DECODE_ACCESS_VALIDFAIL);
-    	}
     }
     else
     {
@@ -366,21 +355,17 @@ parse_msg_type(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
      * number of SPA fields is also valid for the type
     */
     remaining_fields = num_fields(*ndx);
-    debug("parse_msg_type() : remaining fields after msg type: %d", remaining_fields);
-    debug("parse_msg_type() : and the buffer: \n\t%s\n", *ndx);
 
     switch(ctx->message_type)
     {
         /* optional server_auth + digest */
         case FKO_COMMAND_MSG:
-        case FKO_SERVICE_ACCESS_MSG:
         case FKO_ACCESS_MSG:
             if(remaining_fields > 2)
                 return FKO_ERROR_INVALID_DATA_DECODE_WRONG_NUM_FIELDS;
             break;
 
         /* nat or client timeout + optional server_auth + digest */
-        case FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG:
         case FKO_NAT_ACCESS_MSG:
         case FKO_LOCAL_NAT_ACCESS_MSG:
         case FKO_CLIENT_TIMEOUT_ACCESS_MSG:
@@ -497,84 +482,44 @@ parse_rand_val(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
     return FKO_SUCCESS;
 }
 
-
 /* Decode the encoded SPA data.
 */
 int
 fko_decode_spa_data(fko_ctx_t ctx)
 {
     char       *tbuf, *ndx;
-    int         t_size, i, res, num_field_parsers=0;
-    field_parser_ptr_t *field_parser = NULL;
+    int         t_size, i, res;
 
     /* Array of function pointers to SPA field parsing functions
     */
-    if(ctx->disable_sdp_mode)
-    {
-        num_field_parsers = FIELD_PARSERS;
-        field_parser = calloc(num_field_parsers, sizeof(field_parser_ptr_t));
+    int (*field_parser[FIELD_PARSERS])(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
+        = { parse_rand_val,       /* Extract random value */
+            parse_username,       /* Extract username */
+            parse_timestamp,      /* Client timestamp */
+            parse_version,        /* SPA version */
+            parse_msg_type,       /* SPA msg type */
+            parse_msg,            /* SPA msg string */
+            parse_nat_msg,        /* SPA NAT msg string */
+            parse_server_auth,    /* optional server authentication method */
+            parse_client_timeout  /* client defined timeout */
+          };
 
-        field_parser[0]    = parse_rand_val;       /* Extract random value */
-        field_parser[1]    = parse_username;       /* Extract username */
-        field_parser[2]    = parse_timestamp;      /* Client timestamp */
-        field_parser[3]    = parse_version;        /* SPA version */
-        field_parser[4]    = parse_msg_type;       /* SPA msg type */
-        field_parser[5]    = parse_msg;            /* SPA msg string */
-        field_parser[6]    = parse_nat_msg;        /* SPA NAT msg string */
-        field_parser[7]    = parse_server_auth;    /* optional server authentication method */
-        field_parser[8]    = parse_client_timeout; /* client defined timeout */
-    }
-    else
-    {
-        num_field_parsers = SDP_FIELD_PARSERS;
-        field_parser = calloc(num_field_parsers, sizeof(field_parser_ptr_t));
-
-        field_parser[0]    = parse_rand_val;       /* Extract random value */
-        field_parser[1]    = parse_timestamp;      /* Client timestamp */
-        field_parser[2]    = parse_msg_type;       /* SPA msg type */
-        field_parser[3]    = parse_msg;            /* SPA msg string */
-        field_parser[4]    = parse_nat_msg;        /* SPA NAT msg string */
-        field_parser[5]    = parse_server_auth;    /* optional server authentication method */
-
-    }
     if (! is_valid_encoded_msg_len(ctx->encoded_msg_len))
-    {
-        free(field_parser);
         return(FKO_ERROR_INVALID_DATA_DECODE_MSGLEN_VALIDFAIL);
-    }
 
     /* Make sure there are no non-ascii printable chars
     */
     for (i=0; i < (int)strnlen(ctx->encoded_msg, MAX_SPA_ENCODED_MSG_SIZE); i++)
-    {
         if(isprint(ctx->encoded_msg[i]) == 0)
-        {
-            free(field_parser);
             return(FKO_ERROR_INVALID_DATA_DECODE_NON_ASCII);
-        }
-    }
 
     /* Make sure there are enough fields in the SPA packet
      * delimited with ':' chars
     */
     ndx = ctx->encoded_msg;
 
-    if(ctx->disable_sdp_mode)
-    {
-        if (num_fields(ndx) < MIN_SPA_FIELDS)
-        {
-            free(field_parser);
-            return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
-        }
-    }
-    else
-    {
-        if (num_fields(ndx) < MIN_SDP_SPA_FIELDS)
-        {
-            free(field_parser);
-            return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
-        }
-    }
+    if (num_fields(ndx) < MIN_SPA_FIELDS)
+        return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
 
     ndx += last_field(ndx);
 
@@ -584,10 +529,7 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     res = is_valid_digest_len(t_size, ctx);
     if(res != FKO_SUCCESS)
-    {
-        free(field_parser);
         return res;
-    }
 
     if(ctx->digest != NULL)
         free(ctx->digest);
@@ -598,10 +540,7 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     ctx->digest = strdup(ndx);
     if(ctx->digest == NULL)
-    {
-        free(field_parser);
         return(FKO_ERROR_MEMORY_ALLOCATION);
-    }
 
     /* Chop the digest off of the encoded_msg bucket...
     */
@@ -614,17 +553,13 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     tbuf = calloc(1, FKO_ENCODE_TMP_BUF_SIZE);
     if(tbuf == NULL)
-    {
-        free(field_parser);
         return(FKO_ERROR_MEMORY_ALLOCATION);
-    }
 
     /* Can now verify the digest.
     */
     res = verify_digest(tbuf, t_size, ctx);
     if(res != FKO_SUCCESS)
     {
-        free(field_parser);
         free(tbuf);
         return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
     }
@@ -634,12 +569,11 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     ndx = ctx->encoded_msg;
 
-    for (i=0; i < num_field_parsers; i++)
+    for (i=0; i < FIELD_PARSERS; i++)
     {
         res = (*field_parser[i])(tbuf, &ndx, &t_size, ctx);
         if(res != FKO_SUCCESS)
         {
-            free(field_parser);
             free(tbuf);
             return res;
         }
@@ -648,10 +582,6 @@ fko_decode_spa_data(fko_ctx_t ctx)
     /* Done with the tmp buffer.
     */
     free(tbuf);
-
-    /* Done with field_parser
-     */
-    free(field_parser);
 
     /* Call the context initialized.
     */
