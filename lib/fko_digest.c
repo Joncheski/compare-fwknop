@@ -1,13 +1,14 @@
-/**
- * \file lib/fko_digest.c
+/*
+ *****************************************************************************
  *
- * \brief Create the base64-encoded digest for the current spa data. The
+ * File:    fko_digest.c
+ *
+ * Purpose: Create the base64-encoded digest for the current spa data. The
  *          digest used is determined by the digest_type setting in the
  *          fko context.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -192,31 +193,11 @@ set_digest(char *data, char **digest, short digest_type, int *digest_len)
             *digest_len = SHA512_B64_LEN;
             break;
 
-        case FKO_DIGEST_SHA3_256:
-            md = calloc(1, MD_HEX_SIZE(SHA3_256_DIGEST_LEN)+1);
-            if(md == NULL)
-                return(FKO_ERROR_MEMORY_ALLOCATION);
-
-            sha3_256_base64(md,
-                (unsigned char*)data, data_len);
-            *digest_len = SHA3_256_B64_LEN;
-            break;
-
-        case FKO_DIGEST_SHA3_512:
-            md = calloc(1, MD_HEX_SIZE(SHA3_512_DIGEST_LEN)+1);
-            if(md == NULL)
-                return(FKO_ERROR_MEMORY_ALLOCATION);
-
-            sha3_512_base64(md,
-                (unsigned char*)data, data_len);
-            *digest_len = SHA3_512_B64_LEN;
-            break;
-
         default:
             return(FKO_ERROR_INVALID_DIGEST_TYPE);
     }
 
-    /* Just in case this is a subsequent call to this function.  We
+    /* Just in case this is a subsquent call to this function.  We
      * do not want to be leaking memory.
     */
     if(*digest != NULL)

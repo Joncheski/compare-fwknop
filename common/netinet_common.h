@@ -1,13 +1,14 @@
-/**
- * \file common/netinet_common.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for common network packet structures.  We roll our
+ * File:    netinet_common.h
+ *
+ * Purpose: Header file for common network packet structures.  We roll our
  *          own (actually copy) here in an effort to reduce the cross-
- *          platform "hoop-jumping" we would need to do.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *          platform "hoop-jumping" we would need to do). 
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -45,7 +46,7 @@
   #if HAVE_NETINET_IN_H
     #include <netinet/in.h>
   #endif
-  #if PLATFORM_NETBSD || PLATFORM_OPENBSD  /* for autoconf net/if.h difficulties */
+  #if PLATFORM_OPENBSD  /* OpenBSD hack due to autoconf net/if.h difficulties */
     #include <net/if.h>
     #include <net/ethertypes.h>
     #include <netinet/if_ether.h>

@@ -1,11 +1,12 @@
-/**
- * \file server/fwknopd_errors.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for fwknopd_errors.c.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fwknopd_errors.h
+ *
+ * Purpose: Header file for fwknopd_errors.c.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -59,28 +60,33 @@ enum {
     FW_RULE_UNKNOWN_ERROR
 };
 
+/* Config and Access errors
+ */
+enum {
+    FWKNOPD_SUCCESS = 0,
+    FWKNOPD_ERROR_BAD_MSG = 0x3000,
+    FWKNOPD_ERROR_BAD_STANZA_DATA,
+	FWKNOPD_ERROR_BAD_SERVICE_DATA,
+    FWKNOPD_ERROR_MUTEX,
+    FWKNOPD_ERROR_BAD_CONFIG,
+    FWKNOPD_ERROR_UNTIMELY_MSG,
+	FWKNOPD_ERROR_CONNTRACK,
+	FWKNOPD_ERROR_MEMORY_ALLOCATION,
+	FWKNOPD_ERROR_CTRL_COM,
+    FWKNOPD_ERROR
+};
+
 /* Macro for determining if an error code is a spa_msg handler error
  * and/or a firewall rule processing error.
 */
 #define IS_SPA_MSG_ERROR(x) (x & 0x1000)
 #define IS_FW_RULE_ERROR(x) (x & 0x2000)
-#define IS_FWKNOPD_ERROR(x) (IS_SPA_MSG_ERROR(x) | IS_FW_RULE_ERROR(x))
+#define IS_CONFIG_ERROR(x)  (x & 0x3000)
+#define IS_FWKNOPD_ERROR(x) (IS_SPA_MSG_ERROR(x) | IS_FW_RULE_ERROR(x) | IS_CONFIG_ERROR(x))
 
 /* Function prototypes
 */
-
-/**
- * \brief takes a numeric error code and returns the readable string
- *
- * \param err_code The integer error code to convert
- *
- * \return returns a pointer to the error string
- */
 const char* get_errstr(const int err_code);
-
-/**
- * \brief print all server errors (from server/fwknopd_errors.c) to stdout
- */
 void dump_server_errors(void);
 
 #endif /* FWKNOPD_ERRORS_H */

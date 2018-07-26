@@ -27,16 +27,12 @@ The main application of this program is to conceal services such as 'SSH'
 with an additional layer of security in order to make the exploitation of
 vulnerabilities (both 0-day and unpatched code) much more difficult. In
 addition, services that are concealed in this fashion naturally cannot be
-scanned for with 'Nmap' or 'Shodan'.
+scanned for with 'Nmap'.
 
 The main configuration for *fwknopd* is maintained within two files:
 'fwknopd.conf' and 'access.conf'. The default location for these files
 is determined at package configuration (typically '@sysconfdir@/fwknop').
 The configuration variables within these files are described below.
-
-Additional information may be found in the tutorial ``Single Packet Authorization:
-A Comprehensive Guide to Strong Service Concealment with fwknop'' available
-online (see: 'http://www.cipherdyne.org/fwknop/docs/fwknop-tutorial.html').
 
 
 COMMAND-LINE OPTIONS
@@ -60,11 +56,6 @@ COMMAND-LINE OPTIONS
     not given, 'fwknopd' will use the compile-time default location (typically
     '@sysconfdir@/fwknop/access.conf').
 
-*--access-folder*='<access-folder>'::
-    Specify the location of the 'access.conf' folder. If this option is
-    given, rather than load a single access.conf file, all the .conf
-    files in the given folders are processed.
-
 *-c, --config*='<config-file>'::
     Specify the location of the 'fwknopd.conf' file. If this option is
     not given, 'fwknopd' will use the default location (typically
@@ -81,8 +72,7 @@ COMMAND-LINE OPTIONS
 
 *-D, --dump-config*::
     Dump the configuration values that *fwknopd* derives from the
-    '@sysconfdir@/fwknop/fwknopd.conf' (or override files) and
-    '@sysconfdir@/fwknop/access.conf' on stderr.
+    '@sysconfdir@/fwknop/fwknopd.conf' (or override files) and '@sysconfdir@/fwknop/access.conf' on stderr.
 
 *--dump-serv-err-codes*::
     Dump all possible *fwknopd* error codes to stdout and exit. This option is
@@ -120,16 +110,10 @@ COMMAND-LINE OPTIONS
     way to stop *fwknopd* without having to look in the process table.
 
 *--exit-parse-config*::
-    Parse config files ('@sysconfdir@/fwknop/fwknopd.conf', and
-    '@sysconfdir@/fwknop/access.conf') and then exit. This provides a way to
-    test whether the config files are properly structured without having to
-    start processing network traffic.
-
-*--exit-parse-digest-cache*::
-    Parse the digest cache file '@localstatedir@/fwknop/digest.cache'
-    and exit. This validates the structure of the digest cache file without
-    having to start processing network traffic. Note that the standard
-    configuration files are also parsed in this mode.
+    Parse config files ('@sysconfdir@/fwknop/fwknopd.conf', '@sysconfdir@/fwknop/access.conf',
+    the digest cache file, etc.) and exit. This provides a way to test whether
+    the config files are properly structured without having to start processing
+    network traffic.
 
 *-l, --locale*='<locale>'::
     Set/override the system default locale setting.
@@ -241,23 +225,24 @@ COMMAND-LINE OPTIONS
 
 FWKNOPD CONFIG AND ACCESS VARIABLES
 -----------------------------------
-*fwknopd* references the '@sysconfdir@/fwknop/fwknopd.conf' file for configuration
-variables to define operational parameters (what network interface and port
+*fwknopd* references the '@sysconfdir@/fwknop/fwknopd.conf' file for configuration variables
+that define its operational parameters (what network interface and port
 to sniff, what features to enable/disable, etc.). The 'fwknopd.conf' file
-does not define any access control directives or set any encryption or authentication
-keys.
+does not define any access control directives.
 
-The access control directives are contained in the '@sysconfdir@/fwknop/access.conf'
-file.  Access control directives define encryption keys and level of access that
+The access control directives are contained in the '@sysconfdir@/fwknop/access.conf' file.
+Access control directives define encryption keys and level of access that
 is granted to an fwknop client that has generated the appropriate encrypted
 SPA message.
 
 FWKNOPD.CONF VARIABLES
 ~~~~~~~~~~~~~~~~~~~~~~
 This section list the more prominent configuration variables used by
-*fwknopd*. You will want to make sure to check these to make sure they have
-appropriate values, but sensible defaults are provided for most systems. See
-the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
+*fwknopd*. It is not a complete list. There are directives for the type
+of firewall used by *fwknopd* (i.e. _iptables_, _ipfw_, or _pf_). You will
+want to make sure to check these to make sure they have appropriate values.
+See the '@sysconfdir@/fwknop/fwknopd.conf' file for the full list and
+corresponding details.
 
 *PCAP_INTF* '<interface>'::
     Specify the ethernet interface on which *fwknopd* will sniff packets.
@@ -359,15 +344,6 @@ the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
     ``EXIT_AT_INTF_DOWN'' variable. If disabled, fwknopd will try to recover
     when a downed interface comes back up.
 
-*ENABLE_RULE_PREPEND* '<Y/N>'::
-    For systems running iptables or firewalld, have *fwknopd* insert new SPA
-    rules at the beginning of the relevant chain (such as ``FWKNOP_INPUT'') instead
-    of appending them to the end of the chain. This causes newly created rules to
-    have precedence over older ones.
-
-*ENABLE_NAT_DNS* '<Y/N>'::
-    Allow fwknopd to resolve hostnames in NAT access messages.
-
 *GPG_HOME_DIR* '<path>'::
     If GPG keys are used instead of a Rijndael symmetric key, this is
     the default GPG keys directory. Note that each access stanza in
@@ -389,11 +365,6 @@ the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
     the ``PCAP_FILTER'' variable would need to be updated to sniff traffic
     over TCP/80 connections and a web server should be running on the same
     server as *fwknopd*.
-
-*ENABLE_X_FORWARDED_FOR* '<Y/N>'::
-    Allows *fwknopd* to use the X-Forwarded-for header from a captured SPA
-    packet over HTTP as the source IP. This can happen when using SPA through
-    an HTTP proxy.
 
 *ENABLE_TCP_SERVER* '<Y/N>'::
     Enable the fwknopd TCP server. This is a "dummy" TCP server that will
@@ -435,7 +406,7 @@ the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
 
 *PCAP_LOOP_SLEEP* '<microseconds>'::
     Sets the number of microseconds to passed as an argument to usleep() in
-    the pcap loop. The default is 100000, or 1/10th of a second.
+    the pcap loop. The default is 10000, or 1/10th of a second.
 
 *ENABLE_PCAP_ANY_DIRECTION* '<Y/N>'::
     Controls whether fwknopd is permitted to sniff SPA packets regardless of
@@ -455,14 +426,14 @@ the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
 *SYSLOG_FACILITY* '<facility>'::
     Override syslog facility. The ``SYSLOG_FACILITY'' variable can be set to
     one of ``LOG_LOCAL{0-7}'' or ``LOG_DAEMON'' (the default).
-
+    
 *ENABLE_DESTINATION_RULE* '<Y/N>'::
     Controls whether *fwknopd* will set the destination field on the firewall
-    rule to the destination address specified on the incoming SPA packet.
+    rule to the destination address specified on the incoming SPA packet. 
     This is useful for interfaces with multiple IP addresses hosting separate
-    services. If ``ENABLE_IPT_OUTPUT'' is set to ``Y'', the source field of
-    the firewall rule is set. FORWARD and SNAT rules are not affected however,
-    DNAT rules will also have their destination field set. The default is
+    services. If ``ENABLE_IPT_OUTPUT'' is set to ``Y'', the source field of 
+    the firewall rule is set. FORWARD and SNAT rules are not affected however, 
+    DNAT rules will also have their destination field set. The default is 
     ``N'', which sets the destination field to 0.0.0.0/0 (any).
 
 *FWKNOP_RUN_DIR* '<path>'::
@@ -471,11 +442,10 @@ the '@sysconfdir@/fwknop/fwknopd.conf' file for additional details.
 
 ACCESS.CONF VARIABLES
 ~~~~~~~~~~~~~~~~~~~~~
-This section describes the access control directives in the
-'@sysconfdir@/fwknop/access.conf' file. Theses directives define encryption
-and authentication keys, and the level of access that is granted to *fwknop*
-clients that have generated an appropriate encrypted and authenticated
-SPA packet.
+This section describes the access control directives in the '@sysconfdir@/fwknop/access.conf'
+file. Theses directives define encryption keys and level of access that
+is granted to *fwknop* clients that have generated the appropriate
+encrypted message.
 
 The 'access.conf' variables described below provide the access directives
 for the SPA packets with a source (or embedded request) IP that matches an
@@ -487,16 +457,16 @@ directive starts a new stanza.
     This defines the source address from which the SPA packet will be
     accepted. The string ``ANY'' is also accepted if a valid SPA packet
     should be honored from any source IP. Every authorization stanza in
-    '@sysconfdir@/fwknop/access.conf' definition must start with the ``SOURCE''
-    keyword.  Networks should be specified in CIDR notation (e.g.
-    ``192.168.10.0/24''), and individual IP addresses can be specified as well.
-    Also, multiple IP's and/or networks can be defined as a comma separated
-    list (e.g.  ``192.168.10.0/24,10.1.1.123'')
-
+    '@sysconfdir@/fwknop/access.conf' definition must start with the ``SOURCE'' keyword.
+    Networks should be specified in CIDR notation (e.g. ``192.168.10.0/24''),
+    and individual IP addresses can be specified as well. Also, multiple
+    IP's and/or networks can be defined as a comma separated list (e.g.
+    ``192.168.10.0/24,10.1.1.123'')
+    
 *DESTINATION* '<IP,..,IP/NET,..,NET/ANY>'::
     This defines the destination address for which the SPA packet will be
     accepted. The string ``ANY'' is also accepted if a valid SPA packet
-    should be honored to any destination IP.
+    should be honored to any destination IP. 
     Networks should be specified in CIDR notation (e.g. ``192.168.10.0/24''),
     and individual IP addresses can be specified as well. Also, multiple
     IP's and/or networks can be defined as a comma separated list (e.g.
@@ -541,19 +511,6 @@ directive starts a new stanza.
     ``FW_ACCESS_TIMEOUT'' is not set then the default timeout of 30 seconds
     will automatically be set.
 
-*%include* '<file>'::
-    Have *fwknopd* import an additional 'access.conf' file. This allows more
-    access stanzas to be defined in other locations in the filesystem, and this
-    can be advantageous in some scenarios by letting non-privileged users define
-    their own encryption and authentication keys for SPA operations. This way,
-    users do not need write access to the main '@sysconfdir@/fwknop/access.conf'
-    file to change keys around or define new ones.
-
-*%include_folder* '<directory>'::
-    Similarly to the '%include' option above, the '%include_folder' directive
-    has *fwknopd* import all .conf files from the specified directory. There is
-    also command line support for this via the 'access-folder' option.
-
 *ENCRYPTION_MODE* '<mode>'::
     Specify the encryption mode when AES is used. The default is CBC mode,
     but other modes can be selected such as OFB and CFB. In general, it is
@@ -565,9 +522,9 @@ directive starts a new stanza.
 
 *HMAC_DIGEST_TYPE* '<digest algorithm>'::
     Specify the digest algorithm for incoming SPA packet authentication. Must
-    be one of *MD5*, *SHA1*, *SHA256*, *SHA384*, *SHA512*, *SHA3_256*, or
-    *SHA3_512*. This is an optional field, and if not specified then *fwknopd*
-    defaults to using SHA256 if the access stanza requires an HMAC.
+    be one of *MD5*, *SHA1*, *SHA256*, *SHA384*, or *SHA512*. This is an
+    optional field, and if not specified then *fwknopd* defaults to using
+    SHA256 if the access stanza requires an HMAC.
 
 *ACCESS_EXPIRE* '<MM/DD/YYYY>'::
     Defines an expiration date for the access stanza in MM/DD/YYYY format.
@@ -845,9 +802,8 @@ Rash's Twitter feed: http://twitter.com/michaelrash, @michaelrash
 
 AUTHORS
 -------
-The primary developers of *fwknop* are Michael Rash (project creator)
-<mbr@cipherdyne.org>, Damien Stuart <dstuart@dstuart.org>, and Jonathan
-Bennett <jbennett@incomsystems.biz>.
+Damien Stuart <dstuart@dstuart.org>,
+Michael Rash <mbr@cipherdyne.org>
 
 
 CONTRIBUTORS
@@ -875,5 +831,5 @@ found in the *fwknop* mailing list archives (see:
 
 DISTRIBUTION
 ------------
-*fwknopd* is distributed under the GNU General Public License (GPL v2+), and
+*fwknopd* is distributed under the GNU General Public License (GPL), and
 the latest version may be downloaded from 'http://www.cipherdyne.org'.

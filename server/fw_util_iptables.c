@@ -1,11 +1,12 @@
-/**
- * \file server/fw_util_iptables.c
+/*
+ *****************************************************************************
  *
- * \brief Fwknop routines for managing iptables firewall rules.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fw_util_iptables.c
+ *
+ * Purpose: Fwknop routines for managing iptables firewall rules.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -37,6 +38,7 @@
 #include "log_msg.h"
 #include "extcmd.h"
 #include "access.h"
+#include "service.h"
 
 static struct fw_config fwc;
 static char   cmd_buf[CMD_BUFSIZE];
@@ -67,7 +69,8 @@ rule_exists_no_chk_support(const fko_srv_options_t * const opts,
         const unsigned int port,
         const char * const natip,
         const unsigned int nat_port,
-        const unsigned int exp_ts)
+        const unsigned int exp_ts,
+        const uint32_t mark)
 {
     int     rule_exists=0;
     char    ipt_line_buf[CMD_BUFSIZE]    = {0};
@@ -79,6 +82,7 @@ rule_exists_no_chk_support(const fko_srv_options_t * const opts,
     char    port_search[CMD_BUFSIZE]     = {0};
     char    nat_port_search[CMD_BUFSIZE] = {0};
     char    exp_ts_search[CMD_BUFSIZE]   = {0};
+    char    mark_search[CMD_BUFSIZE]     = {0};
     char    *ndx = NULL;
 
 #if CODE_COVERAGE
@@ -108,7 +112,13 @@ rule_exists_no_chk_support(const fko_srv_options_t * const opts,
 
     snprintf(port_search, CMD_BUFSIZE-1, "dpt:%u ", port);
     snprintf(nat_port_search, CMD_BUFSIZE-1, ":%u", nat_port);
-    snprintf(target_search, CMD_BUFSIZE-1, " %s ", fwc->target);
+    if(mark == 0)
+        snprintf(target_search, CMD_BUFSIZE-1, " %s ", fwc->target);
+    else
+    {
+        snprintf(target_search, CMD_BUFSIZE-1, " CONNMARK ");
+        snprintf(mark_search, CMD_BUFSIZE-1, " set %#lx", (unsigned long)mark);
+    }
 
     if (srcip != NULL)
         snprintf(srcip_search, CMD_BUFSIZE-1, " %s ", srcip);
@@ -138,7 +148,8 @@ rule_exists_no_chk_support(const fko_srv_options_t * const opts,
             && ((dstip == NULL) ? 1 : (strstr(ipt_line_buf, dstip_search) != NULL))
             && ((natip == NULL) ? 1 : (strstr(ipt_line_buf, natip_search) != NULL))
             && (strstr(ipt_line_buf, target_search) != NULL)
-            && ((port == ANY_PORT) ? 1 : (strstr(ipt_line_buf, port_search) != NULL)))
+            && ((port == ANY_PORT) ? 1 : (strstr(ipt_line_buf, port_search) != NULL))
+            && ((mark == 0) ? 1 : (strstr(ipt_line_buf, mark_search) != NULL)))
         {
             rule_exists = 1;
         }
@@ -231,7 +242,8 @@ rule_exists(const fko_srv_options_t * const opts,
         const unsigned int port,
         const char * const nat_ip,
         const unsigned int nat_port,
-        const unsigned int exp_ts)
+        const unsigned int exp_ts,
+        const uint32_t mark)
 {
     int rule_exists = 0;
 
@@ -240,7 +252,7 @@ rule_exists(const fko_srv_options_t * const opts,
     else
         rule_exists = rule_exists_no_chk_support(opts, fwc, proto, srcip,
                 (opts->fw_config->use_destination ? dstip : NULL), port,
-                nat_ip, nat_port, exp_ts);
+                nat_ip, nat_port, exp_ts, mark);
 
     if(rule_exists == 1)
         log_msg(LOG_DEBUG, "rule_exists() Rule : '%s' in %s already exists",
@@ -694,72 +706,6 @@ delete_all_chains(const fko_srv_options_t * const opts)
             log_msg(LOG_ERR, "delete_all_chains() Error %i from cmd:'%s': %s",
                     res, cmd_buf, err_buf);
     }
-
-#if USE_LIBNETFILTER_QUEUE
-    if(opts->enable_nfq_capture)
-    {
-        zero_cmd_buffers();
-
-        /* Delete the rule to direct traffic to the NFQ chain.
-        */
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_DEL_RULE_ARGS,
-            fwc.fw_command,
-            opts->config[CONF_NFQ_TABLE],
-            "INPUT",
-            1
-        );
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "delete_all_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-
-        zero_cmd_buffers();
-
-        /* Flush the NFQ chain
-        */
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_FLUSH_CHAIN_ARGS,
-            fwc.fw_command,
-            opts->config[CONF_NFQ_TABLE],
-            opts->config[CONF_NFQ_CHAIN]
-        );
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "delete_all_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-
-        zero_cmd_buffers();
-
-        /* Delete the NF_QUEUE chains and rules
-        */
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_DEL_CHAIN_ARGS,
-            fwc.fw_command,
-            opts->config[CONF_NFQ_TABLE],
-            opts->config[CONF_NFQ_CHAIN]
-        );
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "delete_all_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-    }
-#endif
     return;
 }
 
@@ -819,9 +765,6 @@ static int
 create_fw_chains(const fko_srv_options_t * const opts)
 {
     int     i, got_err = 0;
-#if USE_LIBNETFILTER_QUEUE
-    int     res = 0;
-#endif
 
     for(i=0; i < NUM_FWKNOP_ACCESS_TYPES; i++)
     {
@@ -831,100 +774,6 @@ create_fw_chains(const fko_srv_options_t * const opts)
         got_err += mk_chain(opts, i);
     }
 
-#if USE_LIBNETFILTER_QUEUE
-    if(opts->enable_nfq_capture)
-    {
-        zero_cmd_buffers();
-
-        /* Create the NF_QUEUE chains and rules
-        */
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_NEW_CHAIN_ARGS,
-            fwc.fw_command,
-            opts->config[CONF_NFQ_TABLE],
-            opts->config[CONF_NFQ_CHAIN]
-        );
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                         NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "create_fw_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-        {
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-            got_err++;
-        }
-
-        zero_cmd_buffers();
-
-        /* Create the rule to direct traffic to the NFQ chain.
-        */
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_ADD_JUMP_RULE_ARGS,
-            fwc.fw_command,
-            opts->config[CONF_NFQ_TABLE],
-            "INPUT",
-            1,
-            opts->config[CONF_NFQ_CHAIN]
-        );
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                         NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "create_fw_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-        {
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-            got_err++;
-        }
-
-        zero_cmd_buffers();
-
-        /* Create the rule to direct SPA packets to the queue.
-         * If an interface is specified use the "_WITH_IF" version
-         * of the command.
-        */
-        if(strlen(opts->config[CONF_NFQ_INTERFACE]) > 0)
-        {
-            snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_NFQ_ADD_ARGS_WITH_IF,
-                fwc.fw_command,
-                opts->config[CONF_NFQ_TABLE],
-                opts->config[CONF_NFQ_CHAIN],
-                opts->config[CONF_NFQ_INTERFACE],
-                opts->config[CONF_NFQ_PORT],
-                opts->config[CONF_NFQ_QUEUE_NUMBER]
-            );
-        }
-        else
-        {
-            snprintf(cmd_buf, CMD_BUFSIZE-1, "%s " IPT_NFQ_ADD_ARGS,
-                fwc.fw_command,
-                opts->config[CONF_NFQ_TABLE],
-                opts->config[CONF_NFQ_CHAIN],
-                opts->config[CONF_NFQ_PORT],
-                opts->config[CONF_NFQ_QUEUE_NUMBER]
-            );
-        }
-
-        res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
-                NO_TIMEOUT, &pid_status, opts);
-
-        if (opts->verbose)
-            log_msg(LOG_INFO, "create_fw_chains() CMD: '%s' (res: %d, err: %s)",
-                cmd_buf, res, err_buf);
-
-        /* Expect full success on this */
-        if(! EXTCMD_IS_SUCCESS(res))
-        {
-            log_msg(LOG_ERR, "Error %i from cmd:'%s': %s", res, cmd_buf, err_buf);
-            got_err++;
-        }
-    }
-#endif
     return(got_err);
 }
 
@@ -1154,13 +1003,9 @@ create_rule(const fko_srv_options_t * const opts,
 
     zero_cmd_buffers();
 
-    if (strncasecmp(opts->config[CONF_ENABLE_RULE_PREPEND], "Y", 1) == 0) {
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s -I %s %s",
-                opts->fw_config->fw_command, fw_chain, fw_rule);
-    } else {
-        snprintf(cmd_buf, CMD_BUFSIZE-1, "%s -A %s %s",
-                opts->fw_config->fw_command, fw_chain, fw_rule);
-    }
+    snprintf(cmd_buf, CMD_BUFSIZE-1, "%s -A %s %s",
+            opts->fw_config->fw_command, fw_chain, fw_rule);
+
     res = run_extcmd(cmd_buf, err_buf, CMD_BUFSIZE, WANT_STDERR,
                 NO_TIMEOUT, &pid_status, opts);
     chop_newline(err_buf);
@@ -1180,6 +1025,73 @@ create_rule(const fko_srv_options_t * const opts,
 
     return res;
 }
+
+static void
+connmark_rule(const fko_srv_options_t * const opts,
+        const char * const complete_rule_buf,
+        const char * const fw_rule_macro,
+        const char * const srcip,
+        const char * const dstip,
+        const unsigned int proto,
+        const unsigned int port,
+        const char * const nat_ip,
+        const unsigned int nat_port,
+        struct fw_chain * const chain,
+        const uint32_t mark,
+        const unsigned int exp_ts,
+        const time_t now,
+        const char * const msg,
+        const char * const access_msg)
+{
+    char rule_buf[CMD_BUFSIZE] = {0};
+
+    if(complete_rule_buf != NULL && complete_rule_buf[0] != 0x0)
+    {
+        strlcpy(rule_buf, complete_rule_buf, CMD_BUFSIZE-1);
+    }
+    else
+    {
+        memset(rule_buf, 0, CMD_BUFSIZE);
+
+        snprintf(rule_buf, CMD_BUFSIZE-1, fw_rule_macro,
+            chain->table,
+            proto,
+            srcip,
+            dstip,
+            port,
+            exp_ts,
+            mark
+        );
+    }
+
+    /* Check to make sure that the chain and jump rule exist
+    */
+    mk_chain(opts, chain->type);
+
+    if(rule_exists(opts, chain, rule_buf, proto, srcip,
+                dstip, port, nat_ip, nat_port, exp_ts, mark) == 0)
+    {
+        if(create_rule(opts, chain->to_chain, rule_buf))
+        {
+            log_msg(LOG_INFO, "Added %s rule to %s for %s -> %s port %d, expires at %u",
+                msg, chain->to_chain, srcip, (dstip == NULL) ? IPT_ANY_IP : dstip,
+                port, exp_ts
+            );
+
+            chain->active_rules++;
+
+            /* Reset the next expected expire time for this chain if it
+            * is warranted.
+            */
+            if(chain->next_expire < now || exp_ts < chain->next_expire)
+                chain->next_expire = exp_ts;
+        }
+    }
+
+    return;
+}
+
+
 
 static void
 ipt_rule(const fko_srv_options_t * const opts,
@@ -1223,13 +1135,13 @@ ipt_rule(const fko_srv_options_t * const opts,
     mk_chain(opts, chain->type);
 
     if(rule_exists(opts, chain, rule_buf, proto, srcip,
-                dstip, port, nat_ip, nat_port, exp_ts) == 0)
+                dstip, port, nat_ip, nat_port, exp_ts, 0) == 0)
     {
         if(create_rule(opts, chain->to_chain, rule_buf))
         {
-            log_msg(LOG_INFO, "Added %s rule to %s for %s -> %s %s, expires at %u",
+            log_msg(LOG_INFO, "Added %s rule to %s for %s -> %s port %d, expires at %u",
                 msg, chain->to_chain, srcip, (dstip == NULL) ? IPT_ANY_IP : dstip,
-                access_msg, exp_ts
+                port, exp_ts
             );
 
             chain->active_rules++;
@@ -1262,9 +1174,28 @@ static void forward_access_rule(const fko_srv_options_t * const opts,
             "forward_access_rule() forward_all: %d, nat_ip: %s, nat_port: %d",
             acc->forward_all, nat_ip, nat_port);
 
-    memset(rule_buf, 0, CMD_BUFSIZE);
     if(acc->forward_all)
     {
+        if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+        {
+            /* Create connmark rule to enable connection tracking
+             */
+            memset(rule_buf, 0, CMD_BUFSIZE);
+
+            snprintf(rule_buf, CMD_BUFSIZE-1, IPT_CONNMARK_ALL_ARGS,
+                fwd_chain->table,
+                spadat->use_src_ip,
+                exp_ts,
+                spadat->sdp_id
+            );
+
+            connmark_rule(opts, rule_buf, NULL, spadat->use_src_ip,
+                NULL, ANY_PROTO, ANY_PORT, NULL, NAT_ANY_PORT,
+                fwd_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                "*/*");
+        }
+
+        memset(rule_buf, 0, CMD_BUFSIZE);
 
         snprintf(rule_buf, CMD_BUFSIZE-1, IPT_FWD_ALL_RULE_ARGS,
             fwd_chain->table,
@@ -1281,18 +1212,20 @@ static void forward_access_rule(const fko_srv_options_t * const opts,
     }
     else
     {
-        snprintf(rule_buf, CMD_BUFSIZE-1, IPT_FWD_RULE_ARGS,
-            fwd_chain->table,
-            fst_proto,
-            spadat->use_src_ip,
-            nat_port,
-            exp_ts,
-            fwd_chain->target
-        );
+        if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+        {
+            /* Create connmark rule to enable connection tracking
+             */
+            connmark_rule(opts, NULL, IPT_CONNMARK_ARGS, spadat->use_src_ip,
+                nat_ip, fst_proto, nat_port, NULL, NAT_ANY_PORT,
+                fwd_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                spadat->spa_message_remain);
+        }
+
         /* Make the FORWARD access rule
         */
-        ipt_rule(opts, rule_buf, NULL, spadat->use_src_ip,
-            NULL, fst_proto, nat_port, NULL, NAT_ANY_PORT,
+        ipt_rule(opts, NULL, IPT_FWD_RULE_ARGS, spadat->use_src_ip,
+            nat_ip, fst_proto, nat_port, NULL, NAT_ANY_PORT,
             fwd_chain, exp_ts, now, "FORWARD", spadat->spa_message_remain);
     }
     return;
@@ -1385,7 +1318,7 @@ static void snat_rule(const fko_srv_options_t * const opts,
 
         /* Add SNAT or MASQUERADE rules.
         */
-        if(acc->force_snat && acc->force_snat_ip != NULL && is_valid_ipv4_addr(acc->force_snat_ip, strlen(acc->force_snat_ip)))
+        if(acc->force_snat && is_valid_ipv4_addr(acc->force_snat_ip))
         {
             /* Using static SNAT */
             snat_chain = &(opts->fw_config->chain[IPT_SNAT_ACCESS]);
@@ -1393,7 +1326,7 @@ static void snat_rule(const fko_srv_options_t * const opts,
                 "--to-source %s", acc->force_snat_ip);
         }
         else if((opts->config[CONF_SNAT_TRANSLATE_IP] != NULL)
-            && is_valid_ipv4_addr(opts->config[CONF_SNAT_TRANSLATE_IP], strlen(opts->config[CONF_SNAT_TRANSLATE_IP])))
+            && is_valid_ipv4_addr(opts->config[CONF_SNAT_TRANSLATE_IP]))
         {
             /* Using static SNAT */
             snat_chain = &(opts->fw_config->chain[IPT_SNAT_ACCESS]);
@@ -1419,12 +1352,12 @@ static void snat_rule(const fko_srv_options_t * const opts,
     {
         /* Add SNAT or MASQUERADE rules.
         */
-        if(acc->force_snat && acc->force_snat_ip != NULL && is_valid_ipv4_addr(acc->force_snat_ip, strlen(acc->force_snat_ip)))
+        if(acc->force_snat && is_valid_ipv4_addr(acc->force_snat_ip))
         {
             /* Using static SNAT */
             snat_chain = &(opts->fw_config->chain[IPT_SNAT_ACCESS]);
             snprintf(snat_target, SNAT_TARGET_BUFSIZE-1,
-                "--to-source %s", acc->force_snat_ip);
+                "--to-source %s:%i", acc->force_snat_ip, fst_port);
         }
         else if(acc->force_snat && acc->force_masquerade)
         {
@@ -1434,12 +1367,13 @@ static void snat_rule(const fko_srv_options_t * const opts,
                 "--to-ports %i", fst_port);
         }
         else if((opts->config[CONF_SNAT_TRANSLATE_IP] != NULL)
-            && is_valid_ipv4_addr(opts->config[CONF_SNAT_TRANSLATE_IP], strlen(opts->config[CONF_SNAT_TRANSLATE_IP])))
+            && is_valid_ipv4_addr(opts->config[CONF_SNAT_TRANSLATE_IP]))
         {
             /* Using static SNAT */
             snat_chain = &(opts->fw_config->chain[IPT_SNAT_ACCESS]);
             snprintf(snat_target, SNAT_TARGET_BUFSIZE-1,
-                "--to-source %s", opts->config[CONF_SNAT_TRANSLATE_IP]);
+                "--to-source %s:%i", opts->config[CONF_SNAT_TRANSLATE_IP],
+                fst_port);
         }
         else
         {
@@ -1478,8 +1412,6 @@ process_spa_request(const fko_srv_options_t * const opts,
         const acc_stanza_t * const acc, spa_data_t * const spadat)
 {
     char            nat_ip[MAX_IPV4_STR_LEN] = {0};
-    char            nat_dst[MAX_HOSTNAME_LEN] = {0};
-
     unsigned int    nat_port = 0;
     unsigned int    fst_proto;
     unsigned int    fst_port;
@@ -1492,16 +1424,141 @@ process_spa_request(const fko_srv_options_t * const opts,
     acc_port_list_t *port_list = NULL;
     acc_port_list_t *ple = NULL;
 
+    service_data_list_t *next_service = spadat->service_data_list;
+
     char            *ndx = NULL;
     int             res = 0, is_err;
-    int             str_len;
     time_t          now;
     unsigned int    exp_ts;
+
+
+    /* Set our expire time value.
+    */
+    time(&now);
+    exp_ts = now + spadat->fw_access_timeout;
+
+
+    // if SPA message requested service IDs
+    if(spadat->service_data_list != NULL)
+    {
+        while(next_service != NULL)
+        {
+            if(next_service->service_data->nat_port != 0)
+            {
+                // some form of NAT is required
+
+                if(next_service->service_data->nat_ip_str[0] == 0)
+                {
+                    // it's local NAT
+
+                    if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+                    {
+                        /* Create connmark rule to enable connection tracking
+                         */
+                        connmark_rule(opts, NULL, IPT_CONNMARK_ARGS, spadat->use_src_ip,
+                            (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                            next_service->service_data->proto,
+                            next_service->service_data->nat_port,
+                            next_service->service_data->nat_ip_str,
+                            next_service->service_data->nat_port,
+                            in_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                            spadat->spa_message_remain);
+                    }
+
+                    ipt_rule(opts, NULL, IPT_RULE_ARGS, spadat->use_src_ip,
+                        (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                        next_service->service_data->proto,
+                        next_service->service_data->nat_port,
+                        next_service->service_data->nat_ip_str,
+                        next_service->service_data->nat_port,
+                        in_chain, exp_ts,
+                        now, "local NAT", spadat->spa_message_remain);
+                }
+                else if(strlen(fwd_chain->to_chain))
+                {
+                    /* FORWARD access rule
+                     * note - connmark rule handled inside this function
+                    */
+                    forward_access_rule(opts, acc, fwd_chain,
+                            next_service->service_data->nat_ip_str,
+                            next_service->service_data->nat_port,
+                            next_service->service_data->proto,
+                            next_service->service_data->port,
+                            spadat, exp_ts, now);
+                }
+
+                /* DNAT rule
+                */
+                if(strlen(dnat_chain->to_chain) && !acc->disable_dnat)
+                    dnat_rule(opts, acc, dnat_chain,
+                            next_service->service_data->nat_ip_str,
+                            next_service->service_data->nat_port,
+                            next_service->service_data->proto,
+                            next_service->service_data->port,
+                            spadat, exp_ts, now);
+
+                /* SNAT rule
+                */
+                if(acc->force_snat || strncasecmp(opts->config[CONF_ENABLE_IPT_SNAT], "Y", 1) == 0)
+                    snat_rule(opts, acc,
+                            next_service->service_data->nat_ip_str,
+                            next_service->service_data->nat_port,
+                            next_service->service_data->proto,
+                            next_service->service_data->port,
+                            spadat, exp_ts, now);
+
+
+            }  // END IF nat_port != 0
+            else
+            {
+                // local access without NAT
+
+                if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+                {
+                    /* Create connmark rule to enable connection tracking
+                     */
+                    connmark_rule(opts, NULL, IPT_CONNMARK_ARGS, spadat->use_src_ip,
+                        (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                        next_service->service_data->proto,
+                        next_service->service_data->port, NULL, NAT_ANY_PORT,
+                        in_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                        spadat->spa_message_remain);
+                }
+
+                ipt_rule(opts, NULL, IPT_RULE_ARGS, spadat->use_src_ip,
+                    (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                    next_service->service_data->proto,
+                    next_service->service_data->port, NULL, NAT_ANY_PORT,
+                    in_chain, exp_ts, now, "access", spadat->spa_message_remain);
+
+                /* We need to make a corresponding OUTPUT rule if out_chain target
+                 * is not NULL.
+                */
+                if(strlen(out_chain->to_chain))
+                {
+                    ipt_rule(opts, NULL, IPT_OUT_RULE_ARGS, spadat->use_src_ip,
+                        (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                        next_service->service_data->proto,
+                        next_service->service_data->port, NULL, NAT_ANY_PORT,
+                        out_chain, exp_ts, now, "OUTPUT", spadat->spa_message_remain);
+                }
+
+            }  // END ELSE (i.e. not NAT)
+
+            next_service = next_service->next;
+
+        }  // END WHILE next_service != NULL
+
+        return res;
+    }
+
 
     /* Parse and expand our access message.
     */
     if(expand_acc_port_list(&port_list, spadat->spa_message_remain) != 1)
     {
+    	log_msg(LOG_WARNING, "Failed to parse port list in SPA message");
+
         /* technically we would already have exited with an error if there were
          * any memory allocation errors (see the add_port_list() function), but
          * for completeness...
@@ -1520,11 +1577,6 @@ process_spa_request(const fko_srv_options_t * const opts,
     fst_proto = ple->proto;
     fst_port  = ple->port;
 
-    /* Set our expire time value.
-    */
-    time(&now);
-    exp_ts = now + spadat->fw_access_timeout;
-
     /* deal with SPA packets that themselves request a NAT operation
     */
     if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG
@@ -1541,42 +1593,14 @@ process_spa_request(const fko_srv_options_t * const opts,
         else
         {
             ndx = strchr(spadat->nat_access, ',');
-            str_len = strcspn(spadat->nat_access, ",");
-            if((ndx != NULL) && (str_len <= MAX_HOSTNAME_LEN))
+            if(ndx != NULL)
             {
-                strlcpy(nat_dst, spadat->nat_access, str_len+1);
-                if(! is_valid_ipv4_addr(nat_dst, str_len))
+                strlcpy(nat_ip, spadat->nat_access, (ndx-spadat->nat_access)+1);
+                if (! is_valid_ipv4_addr(nat_ip))
                 {
-                    if(strncasecmp(opts->config[CONF_ENABLE_NAT_DNS], "Y", 1) == 0)
-                    {
-                        if (!is_valid_hostname(nat_dst, str_len))
-                        {
-                            log_msg(LOG_INFO, "Invalid Hostname in NAT SPA message");
-                            free_acc_port_list(port_list);
-                            return res;
-                        }
-                        if (ipv4_resolve(nat_dst, nat_ip) == 0)
-                        {
-                            log_msg(LOG_INFO, "Resolved NAT IP in SPA message");
-                        }
-                        else
-                        {
-                            log_msg(LOG_INFO, "Unable to resolve Hostname in NAT SPA message");
-                            free_acc_port_list(port_list);
-                            return res;
-                        }
-                    }
-                    else
-                    {
-                        log_msg(LOG_INFO, "Received Hostname in NAT SPA message, but hostname is disabled.");
-                        free_acc_port_list(port_list);
-                        return res;
-
-                    }
-                }
-                else
-                {
-                    strlcpy(nat_ip, nat_dst, MAX_IPV4_STR_LEN);
+                    log_msg(LOG_INFO, "Invalid NAT IP in SPA message");
+                    free_acc_port_list(port_list);
+                    return res;
                 }
 
                 nat_port = strtol_wrapper(ndx+1, 0, MAX_PORT,
@@ -1589,17 +1613,22 @@ process_spa_request(const fko_srv_options_t * const opts,
                     return res;
                 }
             }
-            else
-            {
-                log_msg(LOG_INFO, "Invalid NAT IP in SPA message");
-                free_acc_port_list(port_list);
-                return res;
-            }
         }
 
         if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG
                 || spadat->message_type == FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCESS_MSG)
         {
+            if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+            {
+                /* Create connmark rule to enable connection tracking
+                 */
+                connmark_rule(opts, NULL, IPT_CONNMARK_ARGS, spadat->use_src_ip,
+                    (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                    fst_proto, nat_port, nat_ip, nat_port,
+                    in_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                    spadat->spa_message_remain);
+            }
+
             ipt_rule(opts, NULL, IPT_RULE_ARGS, spadat->use_src_ip,
                 (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
                 fst_proto, nat_port, nat_ip, nat_port, in_chain, exp_ts,
@@ -1608,6 +1637,7 @@ process_spa_request(const fko_srv_options_t * const opts,
         else if(strlen(fwd_chain->to_chain))
         {
             /* FORWARD access rule
+             * note - connmark rule handled inside this function
             */
             forward_access_rule(opts, acc, fwd_chain, nat_ip,
                     nat_port, fst_proto, fst_port, spadat, exp_ts, now);
@@ -1631,6 +1661,17 @@ process_spa_request(const fko_srv_options_t * const opts,
         */
         while(ple != NULL)
         {
+            if(strncasecmp(opts->config[CONF_DISABLE_CONNECTION_TRACKING], "N", 1) == 0)
+            {
+                /* Create connmark rule to enable connection tracking
+                 */
+                connmark_rule(opts, NULL, IPT_CONNMARK_ARGS, spadat->use_src_ip,
+                    (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
+                    ple->proto, ple->port, NULL, NAT_ANY_PORT,
+                    in_chain, spadat->sdp_id, exp_ts, now, "connmark",
+                    spadat->spa_message_remain);
+            }
+
             ipt_rule(opts, NULL, IPT_RULE_ARGS, spadat->use_src_ip,
                 (fwc.use_destination ? spadat->pkt_destination_ip : IPT_ANY_IP),
                 ple->proto, ple->port, NULL, NAT_ANY_PORT,
@@ -1682,9 +1723,6 @@ rm_expired_rules(const fko_srv_options_t * const opts,
         tmp_mark = ndx;
 
         strlcpy(exp_str, ndx, sizeof(exp_str));
-        if (strchr(exp_str, '*') != NULL)
-            strchr(exp_str, '*')[0] = '\0';
-
         chop_spaces(exp_str);
         if(!is_digits(exp_str))
         {

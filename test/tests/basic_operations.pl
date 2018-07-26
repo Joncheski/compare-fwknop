@@ -5,7 +5,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/SYSLOG_IDENTITY/],
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} " .
             "-a $cf{'def_access'} --dump-config",
     },
     {
@@ -14,7 +14,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/ENABLE_PCAP_PROMISC.*\'Y\'/],
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args " .
             "-O $conf_dir/override_fwknopd.conf --dump-config",
     },
     {
@@ -24,7 +24,7 @@
         'positive_output_matches' => [qr/ENABLE_PCAP_PROMISC.*\'N\'/,
             qr/FILTER.*1234/],
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'def_access'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} -a $cf{'def_access'} " .
             "-d $default_digest_file -p $default_pid_file --dump-config " .
             "-O $conf_dir/override_fwknopd.conf,$conf_dir/override2_fwknopd.conf",
     },
@@ -34,7 +34,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/test\.pid/],
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd -c $conf_dir/var_expansion_fwknopd.conf " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $conf_dir/var_expansion_fwknopd.conf " .
             "-a $cf{'def_access'} -d $default_digest_file --dump-config "
     },
     {
@@ -43,7 +43,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/Invalid embedded/],
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd -c $conf_dir/var_expansion_invalid_fwknopd.conf " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $conf_dir/var_expansion_invalid_fwknopd.conf " .
             "-a $cf{'def_access'} -d $default_digest_file --dump-config "
     },
 
@@ -53,7 +53,7 @@
         'detail'   => 'dump error codes',
         'function' => \&generic_exec,
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args " .
             "--dump-serv-err-codes",
     },
     {
@@ -67,7 +67,7 @@
         'subcategory' => 'server',
         'detail'   => 'exit upon down interface',
         'function' => \&down_interface,
-        'fwknopd_cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'hmac_access'} " .
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} -a $cf{'hmac_access'} " .
             "-d $default_digest_file -p $default_pid_file $intf_str",
         'server_positive_output_matches' => [qr/Fatal error from pcap_dispatch\b/],
     },
@@ -76,7 +76,7 @@
         'subcategory' => 'server',
         'detail'   => 'no exit upon down interface',
         'function' => \&down_interface,
-        'fwknopd_cmdline' => "$fwknopdCmd -c $cf{'no_exit_down_intf'} " .
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'no_exit_down_intf'} " .
             "-a $cf{'hmac_access'} -d $default_digest_file -p " .
             "$default_pid_file $intf_str",
         'server_positive_output_matches' => [qr/Error from pcap_dispatch\b/],
@@ -90,7 +90,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/Could\snot|Last\sfwknop/i],
         'exec_err' => $IGNORE,
-        'cmdline' => "$fwknopCmd --show-last",
+        'cmdline' => "$fwknopCmd $client_sdp_options --show-last",
     },
     {
         'category' => 'basic operations',
@@ -99,7 +99,7 @@
         'function' => \&rm_last_args,
         'positive_output_matches' => [qr/Could\snot|Last\sfwknop/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd --show-last",
+        'cmdline' => "$fwknopCmd $client_sdp_options --show-last",
     },
     {
         'category' => 'basic operations',
@@ -108,7 +108,7 @@
         'function' => \&rm_last_args,
         'positive_output_matches' => [qr/Unable\sto\sdetermine/i],
         'exec_err' => $YES,
-        'cmdline' => "env -u HOME $fwknopCmd --show-last --rc-file $cf{'rc_def_key'}",
+        'cmdline' => "env -u HOME $fwknopCmd $client_sdp_options --show-last --rc-file $cf{'rc_def_key'}",
     },
     {
         'category' => 'basic operations',
@@ -116,7 +116,7 @@
         'detail'   => 'show last args (4)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd --save-args-file empty.args " .
+        'cmdline' => "$fwknopCmd $client_sdp_options --save-args-file empty.args " .
             "--show-last --rc-file $cf{'rc_def_key'}",
     },
     {
@@ -125,56 +125,8 @@
         'detail'   => 'save args too long',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip " .
+        'cmdline' => "$fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip -D $loopback_ip " .
             "--get-key $local_key_file --save-args-file too_long.args " . "-A tcp/22 "x300
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'no-home-dir (1)',
-        'function' => \&generic_exec,
-        'positive_output_matches' => [qr/must\sset\s\-\-rc\-file\spath/],
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip " .
-            "--get-key $local_key_file --no-home-dir --save-rc-stanza -A tcp/22 "
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'no-home-dir (2)',
-        'function' => \&generic_exec,
-        'exec_err' => $NO,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip " .
-            "--get-key $local_key_file -A tcp/22 "
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'no-rc-file (1)',
-        'function' => \&generic_exec,
-        'positive_output_matches' => [qr/Cannot save an rc stanza in/],
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip " .
-            "--get-key $local_key_file -A tcp/22 --no-rc-file --save-rc-stanza "
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'no-rc-file (2)',
-        'function' => \&generic_exec,
-        'positive_output_matches' => [qr/Cannot list stanzas in/],
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd --no-rc-file --stanza-list "
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'no-rc-file (3)',
-        'function' => \&generic_exec,
-        'positive_output_matches' => [qr/Cannot set stanza name/],
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip " .
-            "--get-key $local_key_file -A tcp/22 --no-rc-file -n test "
     },
 
     {
@@ -182,8 +134,9 @@
         'subcategory' => 'client',
         'detail'   => 'previous args (1)',
         'function' => \&generic_exec,
+        'positive_output_matches' => [qr/max\scommand\sline\sargs/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -l --save-args-file invalid.args",
+        'cmdline' => "$fwknopCmd $client_sdp_options -l --save-args-file invalid.args",
     },
     {
         'category' => 'basic operations',
@@ -191,7 +144,7 @@
         'detail'   => 'previous args (2)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -l --save-args-file /dev/null",
+        'cmdline' => "$fwknopCmd $client_sdp_options -l --save-args-file /dev/null",
     },
     {
         'category' => 'basic operations',
@@ -200,7 +153,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/could\snot\sopen/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline' => "$fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
             "-D $loopback_ip --get-key not/there",
         'fatal'    => $YES
     },
@@ -211,7 +164,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/must\suse\sone\sof/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -D $loopback_ip",
+        'cmdline' => "$fwknopCmd $client_sdp_options -D $loopback_ip",
     },
     {
         'category' => 'basic operations',
@@ -220,7 +173,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/Invalid\sallow\sIP/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a invalidIP -D $loopback_ip",
+        'cmdline' => "$fwknopCmd $client_sdp_options -A tcp/22 -a invalidIP -D $loopback_ip",
     },
     {
         'category' => 'basic operations',
@@ -229,7 +182,7 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/Invalid\sSPA\saccess\smessage/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A invalid/22 -a $fake_ip -D $loopback_ip",
+        'cmdline' => "$fwknopCmd $client_sdp_options -A invalid/22 -a $fake_ip -D $loopback_ip",
     },
     {
         'category' => 'basic operations',
@@ -238,29 +191,8 @@
         'function' => \&generic_exec,
         'positive_output_matches' => [qr/Invalid\sSPA\saccess\smessage/i],
         'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/600001 -a $fake_ip -D $loopback_ip",
+        'cmdline' => "$fwknopCmd $client_sdp_options -A tcp/600001 -a $fake_ip -D $loopback_ip",
     },
-
-    ### trigger strtol() error
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'invalid SPA destination port (1)',
-        'function' => \&generic_exec,
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip -p 9999999999999999999999999999999999999999999999999999999999",
-    },
-
-    ### trigger MAX_PORT error
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client',
-        'detail'   => 'invalid SPA destination port (2)',
-        'function' => \&generic_exec,
-        'exec_err' => $YES,
-        'cmdline' => "$fwknopCmd -A tcp/22 -a $fake_ip -D $loopback_ip -p 99999",
-    },
-
     {
         'category' => 'basic operations',
         'subcategory' => 'client',
@@ -420,7 +352,7 @@
         'detail'   => 'invalid key file path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
                 "-D $loopback_ip --get-key invalidpath --no-save-args $verbose_str"
     },
     {
@@ -429,7 +361,7 @@
         'detail'   => 'invalid key file format',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
                 "-D $loopback_ip --get-key $invalid_key_file --no-save-args $verbose_str"
     },
     {
@@ -438,7 +370,7 @@
         'detail'   => 'invalid key file format (2)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
                 "-D $loopback_ip --get-key $invalid_key_file2 --no-save-args $verbose_str"
     },
     {
@@ -447,7 +379,7 @@
         'detail'   => 'invalid key file format (3)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
                 "-D $loopback_ip --get-key $invalid_key_file3 --no-save-args $verbose_str"
     },
 
@@ -473,7 +405,7 @@
         'detail'   => 'invalid rc file path /dev/null',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$fwknopCmd --rc-file /dev/null"
+        'cmdline'  => "$fwknopCmd $client_sdp_options --rc-file /dev/null"
     },
 
     {
@@ -498,7 +430,7 @@
         'detail'   => '--key-gen file path (-K) too long',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$fwknopdCmd --key-gen --key-gen-file " . 'A'x1030
+        'cmdline'  => "$fwknopdCmd $srv_sdp_options --key-gen --key-gen-file " . 'A'x1030
     },
 
     {
@@ -515,7 +447,7 @@
         'detail'   => 'GPG invalid binary path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --gpg-exe /invalid/path"
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --gpg-exe /invalid/path"
     },
     {
         'category' => 'basic operations',
@@ -523,7 +455,7 @@
         'detail'   => 'sudo invalid binary path (1)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --sudo-exe /invalid/path"
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --sudo-exe /invalid/path"
     },
     {
         'category' => 'basic operations',
@@ -531,521 +463,7 @@
         'detail'   => 'sudo invalid binary path (2)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --sudo-exe /etc/hosts"
-    },
-
-    ### access.conf %include directive tests
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf recursion limit',
-        'function' => \&generic_exec,
-        'exec_err' => $YES,
-        'cmdline'  => "$fwknopdCmd --exit-parse-config -a $cf{'include_r1_hmac_access'} " .
-                "-c $cf{'def'} -d $default_digest_file -p $default_pid_file",
-        'positive_output_matches' => [qr/Refusing to go deeper than/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf multi-include',
-        'function' => \&generic_exec,
-        'cmdline'  => "$fwknopdCmd --exit-parse-config -a $cf{'include_m1_hmac_access'} " .
-                qq/-c $cf{"${fw_conf_prefix}_nat"} -d $default_digest_file -p $default_pid_file -v/,
-        'positive_output_matches' => [qr/Configs parsed/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include missing file',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            '%include       /missing/file',
-            'SOURCE         any',
-            'KEY            testtest'
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include broken stanza (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE         1.1.1.1',
-            "%include       $cf{'def_access'}",
-
-            'SOURCE         4.4.4.4',
-            'KEY            testtest'
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/No keys found/],
-    },
-
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include broken stanza (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-
-            'SOURCE             2.2.2.2',
-            'KEY                stanza2test',
-            'REQUIRE_USERNAME   user2',
-
-            'SOURCE             3.3.3.3',
-            "%include           $cf{'def_access'}", ### default access stanza becomes stanza #4
-            'REQUIRE_USERNAME   user3',
-
-            'SOURCE             4.4.4.4',
-            'KEY                stanza4test',
-            'REQUIRE_USERNAME   user4',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/No keys found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include mixed stanza (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-
-            'SOURCE             2.2.2.2',
-            'KEY                stanza2test',
-            'REQUIRE_USERNAME   user2',
-
-            'SOURCE             3.3.3.3',
-            'KEY                stanza3test',
-            'REQUIRE_USERNAME   user3',
-
-            'SOURCE             4.4.4.4',
-            'KEY                stanza4test',
-            'REQUIRE_USERNAME   user4',
-
-            "%include           $cf{'def_access'}", ### default access stanza becomes stanza #5
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/SOURCE.*5.*\sANY/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include mixed stanza (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $NO,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-
-            'SOURCE             2.2.2.2',
-            'KEY                stanza2test',
-            'REQUIRE_USERNAME   user2',
-
-            'SOURCE             3.3.3.3',
-            "%include           $cf{'def_access'}", ### default access stanza becomes stanza #4
-            'KEY                stanza3test',
-            'REQUIRE_USERNAME   user3',
-
-            'SOURCE             4.4.4.4',
-            'KEY                stanza4test',
-            'REQUIRE_USERNAME   user4',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/SOURCE.*4.*\sANY/],
-    },
-
-    ### %include_folder tests
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder no stanza (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'server_access_file' => [
-            "%include_folder    $access_include_dir/no-access-files",
-        ],
-        'exec_err' => $YES,
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder no stanza (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'server_access_file' => [
-            "%include_folder    $access_include_dir/no-access-files/",
-        ],
-        'exec_err' => $YES,
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder one stanza',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'server_access_file' => [
-
-            "%include_folder    $access_include_dir/no-access-files",
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder /dev/null (1)',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config --access-folder /dev/null",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid access folder directory/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder /dev/null (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            "%include_folder    /dev/null",
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder long dir',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config --access-folder " . 'A'x1030,
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/path is too long/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder / (1)',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config " .
-            "--access-folder /",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/could not find any/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder / (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            "%include_folder    /",
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder /a',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config " .
-            "--access-folder /a",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid access folder/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder /a/ (1)',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config " .
-            "--access-folder /a/",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid access folder/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder /a/ (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            "%include_folder    /a/",
-
-            'SOURCE             1.1.1.1',
-            'KEY                stanza1test',
-            'REQUIRE_USERNAME   user1',
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf include_folder NULL',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} --exit-parse-config " .
-            qq|--access-folder ""|,
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid access folder/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf valid include_keys file (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            "%include_keys $access_include_dir/valid-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'negative_output_matches' => [qr/skipping stanza/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf valid include_keys file (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY             testtest',
-            'SOURCE             2.2.2.2',
-            "%include_keys $access_include_dir/valid-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'negative_output_matches' => [qr/skipping stanza/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf unauthorized include_keys file (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            "%include_keys $access_include_dir/unauth-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/Ignoring invalid entry: \'SOURCE\'/],
-        'negative_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf unauthorized include_keys file (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY             testtest',
-            'SOURCE             2.2.2.2',
-            "%include_keys $access_include_dir/unauth-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/Ignoring invalid entry: \'SOURCE\'/],
-        'negative_output_matches' => [qr/Could not find valid SOURCE stanza/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf invalid include_keys file (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            "%include_keys $access_include_dir/invalid-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/Ignoring invalid entry: \'INVALID_STATEMENT\'/],
-        'negative_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf invalid include_keys file (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY             testtest',
-            'SOURCE             2.2.2.2',
-            "%include_keys $access_include_dir/invalid-keyfile",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/Ignoring invalid entry: \'INVALID_STATEMENT\'/],
-        'negative_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf empty include_keys file (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            "%include_keys $access_include_dir/empty-file",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/skipping stanza/],
-        'positive_output_matches' => [qr/Could not find valid SOURCE stanza/],
-        'negative_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf empty include_keys file (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY             testtest',
-            'SOURCE             2.2.2.2',
-            "%include_keys $access_include_dir/empty-file",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/skipping stanza/],
-        'negative_output_matches' => [qr/Could not find valid SOURCE stanza/],
-        'negative_output_matches' => [qr/was not found/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf nonexistent include_keys file (1)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            "%include_keys    /tmp/doesnt_exist ",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/skipping stanza/],
-        'positive_output_matches' => [qr/Could not find valid SOURCE stanza/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'access.conf nonexistent include_keys file (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files -D --exit-parse-config -v",
-        'exec_err' => $YES,
-        'server_access_file' => [
-
-            'SOURCE             1.1.1.1',
-            'KEY             testtest',
-            'SOURCE             2.2.2.2',
-            "%include_keys    /tmp/doesnt_exist ",
-
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/skipping stanza/],
-        'negative_output_matches' => [qr/Could not find valid SOURCE stanza/],
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --sudo-exe /etc/hosts"
     },
     {
         'category' => 'basic operations',
@@ -1056,6 +474,7 @@
         'exec_err' => $YES,
         'user_group_mismatch' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -1073,6 +492,7 @@
         'exec_err' => $YES,
         'sudo_user_group_mismatch' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -1096,7 +516,7 @@
         'detail'   => 'resolve HTTP proxy invalid port',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline'  => "$default_client_args --http-proxy http://www.cipherdyne.org:99999/cgi-bin/myip -P http",
+        'cmdline'  => "$default_client_args --http-proxy $resolve_url" . ":99999 -P http",
     },
 
     ### rc tests
@@ -1245,27 +665,6 @@
                 'vars' => {'KEY' => 'testtest', 'DIGEST_TYPE' => 'SHA512'}}],
         'positive_output_matches' => [qr/Digest\sType\:\s.*SHA512/],
     },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client rc file',
-        'detail'   => 'digest SHA3_256',
-        'function' => \&client_rc_file,
-        'cmdline'  => $client_rewrite_rc_args,
-        'write_rc_file' => [{'name' => 'default',
-                'vars' => {'KEY' => 'testtest', 'DIGEST_TYPE' => 'SHA3_256'}}],
-        'positive_output_matches' => [qr/Digest\sType\:\s.*SHA3_256/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client rc file',
-        'detail'   => 'digest SHA3_512',
-        'function' => \&client_rc_file,
-        'cmdline'  => $client_rewrite_rc_args,
-        'write_rc_file' => [{'name' => 'default',
-                'vars' => {'KEY' => 'testtest', 'DIGEST_TYPE' => 'SHA3_512'}}],
-        'positive_output_matches' => [qr/Digest\sType\:\s.*SHA3_512/],
-    },
-
     ### rc tests: spa server proto
     {
         'category' => 'basic operations',
@@ -1527,7 +926,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'require stanza name or -D',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
             "--no-save-args $verbose_str --rc-file $save_rc_file --key-gen " .
             "--save-rc-stanza --force-stanza --test",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1540,7 +939,7 @@
         'subcategory' => 'client',
         'detail'   => 'require SPA destination',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
             "--no-save-args $verbose_str --rc-file $save_rc_file " .
             "--save-rc-stanza --force-stanza --test",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1553,7 +952,7 @@
         'subcategory' => 'client',
         'detail'   => 'invalid SPA destination (1)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
             "--no-save-args $verbose_str -D .168.10.1 -n default " .
             "--rc-file $save_rc_file --save-rc-stanza --force-stanza",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1566,7 +965,7 @@
         'subcategory' => 'client',
         'detail'   => 'invalid SPA destination (2)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
             "--no-save-args $verbose_str -D badhost -n default " .
             "--rc-file $save_rc_file --save-rc-stanza --force-stanza",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1930,7 +1329,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid access (1)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N 192.168.10.1:12345 --nat-port 22211",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1944,7 +1343,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid access (2)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N 192.168.10.1:12345 --nat-port 22211",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1958,21 +1357,21 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid access (3)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22 -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N .168.10.1 --nat-port 22211",
         'save_rc_stanza' => [{'name' => 'default',
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1', 'NAT_PORT' => '11111'}}],
         'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid\sNAT\sdestination/]
+        'positive_output_matches' => [qr/Unable\sto\sresolve/]
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid access (4)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/99999 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/99999 -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N 192.168.10.1:99999 --nat-port 22211",
         'save_rc_stanza' => [{'name' => 'default',
@@ -1986,7 +1385,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid access (5)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N 192.168.10.1:12345",
         'save_rc_stanza' => [{'name' => 'default',
@@ -2001,7 +1400,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => 'NAT invalid multi-port -A',
         'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22,tcp/123 -a $fake_ip " .
+        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd $client_sdp_options -A tcp/22,tcp/123 -a $fake_ip " .
                 "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
                 "--force-stanza --test -n default -N 192.168.10.1:12345 --nat-port 22211",
         'save_rc_stanza' => [{'name' => 'default',
@@ -2045,20 +1444,6 @@
         'positive_output_matches' => [qr/Message.*0.0.0.0/],
         'rc_positive_output_matches' => [qr/ALLOW_IP.*0.0.0.0/],
     },
-
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client save rc file',
-        'detail'   => '--server-resolve-ipv4',
-        'function' => \&client_rc_file,
-        'cmdline'  => "$lib_view_str $valgrind_str $fwknopCmd -A tcp/22 -a $fake_ip " .
-                "-D $loopback_ip --rc-file $save_rc_file --save-rc-stanza " .
-                "--force-stanza --test -n default -R --server-resolve-ipv4",
-        'save_rc_stanza' => [{'name' => 'default',
-                'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
-                    'HMAC_DIGEST_TYPE' => 'SHA1',
-                    'SERVER_RESOLVE_IPV4' => 'Y'}}],
-    },
     {
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
@@ -2069,41 +1454,37 @@
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1'}}],
         'positive_output_matches' => [qr/Resolved/],
-        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/,
-                qr/HTTP_USER_AGENT.*FwknopTestSuite\/2.6/],
+        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/, qr/HTTP_USER_AGENT.*FwknopTestSuite\/2.6/],
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (1)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$client_save_rc_args_no_test -n default -R " .
-                "--resolve-url http://www.cipherdyne.org/cgi-bin/myip",
+        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url $resolve_url",
         'save_rc_stanza' => [{'name' => 'default',
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1'}}],
         'positive_output_matches' => [qr/Resolved/],
-        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/,
-                qr/RESOLVE_URL.*cipherdyne.org.*myip/],
+        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/, qr/RESOLVE_URL.*http/],
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (2)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$client_save_rc_args_no_test -n default " .
-                "-R --resolve-url www.cipherdyne.org/cgi-bin/myip",
+        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url $resolve_url",
         'save_rc_stanza' => [{'name' => 'default',
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1'}}],
         'positive_output_matches' => [qr/Resolved/],
-        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/,
-                qr/RESOLVE_URL.*\swww.cipherdyne.org.*myip/],
+        'rc_positive_output_matches' => [qr/RESOLVE_IP_HTTP.*Y/, qr/RESOLVE_URL/],
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (3)',
+        'broken_flag' => 1,
         'function' => \&client_rc_file,
         'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url http://127.0.0.1/",
         'save_rc_stanza' => [{'name' => 'default',
@@ -2117,6 +1498,7 @@
         'category' => 'basic operations',
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (4)',
+        'broken_flag' => 1,
         'function' => \&client_rc_file,
         'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url http://127.0.0.1",
         'save_rc_stanza' => [{'name' => 'default',
@@ -2131,7 +1513,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (5)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url http://www.cipherdyne.org/cgi-bin/myip",
+        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url $resolve_url",
         'save_rc_stanza' => [{'name' => 'default',
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1'}}],
@@ -2143,7 +1525,7 @@
         'subcategory' => 'client save rc file',
         'detail'   => '-R resolve http (6)',
         'function' => \&client_rc_file,
-        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url https://www.cipherdyne.org/cgi-bin/myip",
+        'cmdline'  => "$client_save_rc_args_no_test -n default -R --resolve-url $resolve_url",
         'save_rc_stanza' => [{'name' => 'default',
                 'vars' => {'KEY' => 'testtest', 'HMAC_KEY' => 'hmactest',
                     'HMAC_DIGEST_TYPE' => 'SHA1'}}],
@@ -2314,24 +1696,6 @@
         'exec_err' => $YES,
         'positive_output_matches' => [qr/Parameter\serror/],
         'rc_positive_output_matches' => [qr/TIME_OFFSET.*123456789999/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client save rc file',
-        'detail'   => 'time offset invalid (3)',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopCmd --test -A tcp/22 -s -D 127.0.0.2 --time-offset-plus 99999999999999999",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid time offset/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'client save rc file',
-        'detail'   => 'time offset invalid (4)',
-        'function' => \&generic_exec,
-        'cmdline' => "$fwknopCmd --test -A tcp/22 -s -D 127.0.0.2 --time-offset-minus 99999999999999999",
-        'exec_err' => $YES,
-        'positive_output_matches' => [qr/Invalid time offset/],
     },
 
     {
@@ -2882,7 +2246,7 @@
         'subcategory' => 'server',
         'detail'   => 'list current fwknopd fw rules',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --fw-list",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --fw-list",
     },
     {
         'category' => 'basic operations',
@@ -2892,6 +2256,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --fw-list",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    testtest'
         ],
@@ -2908,6 +2273,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --fw-list",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    testtest'
         ],
@@ -2917,242 +2283,33 @@
         'positive_output_matches' => [qr/NOT a directory/],
     },
 
-    ### include_keys_file() code coverage
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys CHANGEME',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'KEY    __CHANGEME__'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/KEY value is not properly/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys base64 CHANGEME',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'KEY_BASE64    __CHANGEME__'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/KEY_BASE64 value is not properly/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys base64 invalid',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'KEY_BASE64    $$$$$$$$'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/look like base64/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys HMAC CHANGEME',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'HMAC_KEY    __CHANGEME__'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/HMAC_KEY value is not properly/],
-    },
-
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys HMAC base64 CHANGEME',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'HMAC_KEY_BASE64    __CHANGEME__'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/HMAC_KEY_BASE64 value is not properly/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys HMAC base64 invalid',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'HMAC_KEY_BASE64    $$$$$$$$'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/look like base64/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys GPG_DECRYPT_PW valid',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'GPG_REMOTE_ID      eaee1234',
-            'GPG_FINGERPRINT_ID ffee1234',
-            'GPG_DECRYPT_ID     aabb1234',
-            'GPG_DECRYPT_PW     somepass',
-            'GPG_REQUIRE_SIG    Y',
-            'GPG_DISABLE_SIG    Y',
-            'GPG_IGNORE_SIG_VERIFY_ERROR    Y',
-            'GPG_ALLOW_NO_PW    Y'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys GPG_DECRYPT_PW invalid',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'GPG_DECRYPT_PW     __CHANGEME__'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/value is not properly/],
-    },
-
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'include_keys invalid line',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE any',
-            "%include_keys $rewrite_include_keys_access_conf",
-            'SOURCE any',
-            'KEY    testtest'
-        ],
-        'server_include_keys_access_file' => [
-            'KEYinvalidline'
-        ],
-
-        'server_conf_file' => [
-            '### comment line'
-        ],
-        'positive_output_matches' => [qr/Invalid access file entry/],
-    },
-
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'unrecognized arg displays usage',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -X",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -X",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'list all current fw rules',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --fw-list-all",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --fw-list-all",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'flush current firewall rules',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args --fw-flush",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --fw-flush",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'invalid pcap filter',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args " .
-            "-i $loopback_intf -f -P proto invalid",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f -P proto invalid",
         'exec_err' => $YES,
     },
     {
@@ -3160,7 +2317,7 @@
         'subcategory' => 'server',
         'detail'   => 'invalid config path /dev/null',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c /dev/null -a $cf{'def_access'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c /dev/null -a $cf{'def_access'} " .
             "-p $default_pid_file $intf_str --exit-parse-config ",
         'exec_err' => $YES,
     },
@@ -3168,10 +2325,10 @@
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
-        'detail'   => 'digest cache validation (1)',
+        'detail'   => 'digest cache validation',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'def_access'} " .
-            "-p $default_pid_file $intf_str --exit-parse-digest-cache " .
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} -a $cf{'def_access'} " .
+            "-p $default_pid_file $intf_str --exit-parse-config " .
             "-d $rewrite_digest_file -v -v -v -v",
         'exec_err' => $YES,
         'digest_cache_file' => [
@@ -3184,18 +2341,6 @@
         ],
         'positive_output_matches' => [qr/invalid\sdigest\sfile\sentry/],
     },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'digest cache validation (2)',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'def_access'} " .
-            "-p $default_pid_file $intf_str --exit-parse-digest-cache " .
-            "-d $rewrite_digest_file -v -v -v -v",
-        'digest_cache_file' => [
-            'ybbYzHw4QMLd3rAlifxSAIedifnchUyuU0NW02hC6Zs 17 127.0.0.1 37246 127.0.0.1 62201 1399089310'],
-        'positive_output_matches' => [qr/Digest cache parsed/]
-    },
 
     {
         'category' => 'basic operations',
@@ -3204,7 +2349,7 @@
         'function' => \&generic_exec,
         'exec_err' => $YES,
         ### add a few additional command line args for test coverage
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f " .
             "-l somelocale --pcap-any-direction --syslog-enable -C 999999999999",
     },
     {
@@ -3213,7 +2358,7 @@
         'detail'   => 'invalid locale',
         'function' => \&generic_exec,
         'exec_err' => $NO,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f " .
             "-l somelocale --dump-config",
         'positive_output_matches' => [qr/Unable to set locale/],
     },
@@ -3223,7 +2368,7 @@
         'detail'   => 'invalid run dir path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd -c $cf{'invalid_run_dir_path'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'invalid_run_dir_path'} " .
             "-a $cf{'def_access'} -f --dump-config",
         'positive_output_matches' => [qr/is not absolute/],
     },
@@ -3233,11 +2378,12 @@
         'detail'   => 'sniff invalid interface',
         'function' => \&server_conf_files,
         'exec_err' => $YES,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -i invalidintf -f",
         'positive_output_matches' => [qr/pcap_open_live.*error/],
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3253,6 +2399,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                  any',
             'KEY                    testtest',
             'ACCESS_EXPIRE_EPOCH    999999999999999999999999999999999999'
@@ -3269,10 +2416,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_DAEMON',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3285,10 +2433,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL0',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3301,10 +2450,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL1',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3317,10 +2467,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL2',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3333,10 +2484,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL3',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3349,10 +2501,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL4',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3365,10 +2518,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL5',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3381,10 +2535,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL6',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3397,10 +2552,11 @@
         'subcategory' => 'server',
         'detail'   => 'syslog LOG_LOCAL7',
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3414,10 +2570,11 @@
         'detail'   => 'syslog LOG_LOCAL8',
         'function' => \&server_conf_files,
         'exec_err' => $YES,
-        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd " .
+        'fwknopd_cmdline' => "$lib_view_str $valgrind_str $fwknopdCmd $srv_sdp_options " .
                 "-c $rewrite_fwknopd_conf -a $rewrite_access_conf " .
                 "-d $default_digest_file -p $default_pid_file -D --syslog-enable",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3434,7 +2591,7 @@
         'function' => \&generic_exec,
         'exec_err' => $YES,
         ### add a few additional command line args for test coverage
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f -K -R --exit-parse-config"
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f -K -R --exit-parse-config"
     },
     {
         'category' => 'basic operations',
@@ -3443,7 +2600,7 @@
         'function' => \&generic_exec,
         'exec_err' => $YES,
         ### add a few additional command line args for test coverage
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f -D -R --exit-parse-config"
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f -D -R --exit-parse-config"
     },
 
     {
@@ -3452,7 +2609,7 @@
         'detail'   => 'invalid config file path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd -f -c invalid --exit-parse-config",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -f -c invalid --exit-parse-config",
     },
     {
         'category' => 'basic operations',
@@ -3460,7 +2617,7 @@
         'detail'   => 'invalid access.conf file path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd -f -c $cf{'def'} -a invalid --exit-parse-config",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -f -c $cf{'def'} -a invalid --exit-parse-config",
     },
 
     {
@@ -3469,7 +2626,7 @@
         'detail'   => 'GPG invalid --gpg-home-dir path',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f --gpg-home-dir invalidpath --exit-parse-config",
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f --gpg-home-dir invalidpath --exit-parse-config",
     },
     {
         'category' => 'basic operations',
@@ -3477,7 +2634,7 @@
         'detail'   => 'GPG invalid --gpg-home-dir path (2)',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd $default_server_conf_args -f --exit-parse-config --gpg-home-dir " . 'A'x1200
+        'cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args -f --exit-parse-config --gpg-home-dir " . 'A'x1200
     },
     {
         'category' => 'basic operations',
@@ -3485,7 +2642,7 @@
         'detail'   => 'GPG require sig ID or fingerprint',
         'function' => \&generic_exec,
         'exec_err' => $YES,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'gpg_no_pw_no_fpr_access'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} -a $cf{'gpg_no_pw_no_fpr_access'} " .
             "-d $default_digest_file -p $default_pid_file -f --exit-parse-config",
         'positive_output_matches' => [qr/Must have either sig/],
     },
@@ -3494,7 +2651,7 @@
         'subcategory' => 'server',
         'detail'   => 'GPG require sig and disable sig set',
         'function' => \&generic_exec,
-        'cmdline' => "$fwknopdCmd -c $cf{'def'} -a $cf{'gpg_no_sig_no_fpr_access'} " .
+        'cmdline' => "$fwknopdCmd $srv_sdp_options -c $cf{'def'} -a $cf{'gpg_no_sig_no_fpr_access'} " .
             "-d $default_digest_file -p $default_pid_file -f --exit-parse-config",
         'positive_output_matches' => [qr/GPG_REQUIRE_SIG and GPG_DISABLE_SIG are both set/],
     },
@@ -3504,21 +2661,21 @@
         'subcategory' => 'server',
         'detail'   => 'start',
         'function' => \&server_start,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args $intf_str",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'stop',
         'function' => \&server_stop,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args $intf_str",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'write PID',
         'function' => \&write_pid,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args $intf_str",
     },
 
     {
@@ -3526,22 +2683,22 @@
         'subcategory' => 'server',
         'detail'   => '--packet-limit 1 exit',
         'function' => \&server_packet_limit,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args --packet-limit 1 $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --packet-limit 1 $intf_str",
     },
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
         'detail'   => 'UDP server --packet-limit 1 exit',
         'function' => \&server_packet_limit,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args --udp-server --packet-limit 1 $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --udp-server --packet-limit 1 $intf_str",
     },
 
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
-        'detail'   => 'ignore packets < min SPA len (140)',
+        'detail'   => 'ignore packets < min SPA len (80)',
         'function' => \&server_ignore_small_packets,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args --packet-limit 1 $intf_str",
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --packet-limit 1 $intf_str",
     },
     {
         'category' => 'basic operations',
@@ -3549,7 +2706,7 @@
         'detail'   => '-P bpf filter ignore packet',
         'function' => \&server_bpf_ignore_packet,
         'cmdline'  => $default_client_args,
-        'fwknopd_cmdline' => "$fwknopdCmd $default_server_conf_args --packet-limit 1 $intf_str " .
+        'fwknopd_cmdline' => "$fwknopdCmd $srv_sdp_options $default_server_conf_args --packet-limit 1 $intf_str " .
             qq|-P "udp port $non_std_spa_port"|,
     },
     {
@@ -3557,7 +2714,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str --exit-parse-config",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3567,7 +2724,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec (2)",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain2"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain2"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3577,7 +2734,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec (3)",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain3"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain3"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3587,7 +2744,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec (4)",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain4"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain4"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3597,7 +2754,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec (5)",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain5"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain5"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str --exit-parse-config",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3607,7 +2764,7 @@
         'subcategory' => 'server',
         'detail'   => "invalid $FW_TYPE INPUT spec (6)",
         'function' => \&generic_exec,
-        'cmdline' => qq/$fwknopdCmd -c $cf{"invalid_${fw_conf_prefix}_input_chain6"} -a $cf{'def_access'} / .
+        'cmdline' => qq/$fwknopdCmd $srv_sdp_options -c $cf{"invalid_${fw_conf_prefix}_input_chain6"} -a $cf{'def_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str --exit-parse-config",
         'function' => \&generic_exec,
         'exec_err' => $YES,
@@ -3620,13 +2777,14 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    testtest',
         ],
         'server_conf_file' => [
             'PCAP_DISPATCH_COUNT        9999999999'
         ],
-        'positive_output_matches' => [qr/var PCAP_DISPATCH_COUNT value/],
+        'positive_output_matches' => [qr/invalid\sPCAP_DISPATCH_COUNT/],
     },
     {
         'category' => 'basic operations',
@@ -3636,6 +2794,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    testtest',
         ],
@@ -3652,6 +2811,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    testtest',
         ],
@@ -3670,6 +2830,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_OPEN     /some/cmd -args',
@@ -3687,6 +2848,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_CLOSE    /some/cmd -args',
@@ -3704,6 +2866,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_OPEN     /some/cmd -args',
@@ -3722,6 +2885,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_OPEN     ' . 'A'x500,
@@ -3741,6 +2905,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_CLOSE     ' . 'A'x500,
@@ -3760,6 +2925,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'CMD_CYCLE_OPEN     /some/cmd -args',
@@ -3796,6 +2962,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3812,6 +2979,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3829,6 +2997,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3845,6 +3014,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3859,6 +3029,7 @@
         'function' => \&server_conf_files,
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3875,6 +3046,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -3892,6 +3064,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        __CHANGEME__'
         ],
@@ -3908,6 +3081,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE      any',
             'KEY_BASE64  __CHANGEME__'
         ],
@@ -3924,6 +3098,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE      any',
             'KEY_BASE64  %%%%%%%%%%%%%'
         ],
@@ -3940,6 +3115,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE      any',
             'KEY         testtest',
             'HMAC_KEY    __CHANGEME__'
@@ -3957,6 +3133,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE             any',
             'KEY                testtest',
             'HMAC_KEY_BASE64    __CHANGEME__'
@@ -3975,6 +3152,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE      any',
             'KEY         testtest',
             'HMAC_KEY_BASE64  %%%%%%%%%%%%%'
@@ -3992,6 +3170,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                         any',
             'REQUIRE_SOURCE                 Y',
             'KEY                            testtest',
@@ -4013,6 +3192,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE                         any',
             'HMAC_KEY                       testtest',
             'GPG_DECRYPT_PW                 testtest'
@@ -4030,6 +3210,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                         any',
             'HMAC_KEY                       hmactest',
             'GPG_DECRYPT_PW                 testtest',
@@ -4038,7 +3219,7 @@
         'server_conf_file' => [
             '### comment'
         ],
-        'positive_output_matches' => [qr/unable to l?stat/],
+        'positive_output_matches' => [qr/unable to stat/],
     },
 
     {
@@ -4049,6 +3230,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                 any',
             'KEY                    testtest',
             'FW_ACCESS_TIMEOUT      999999999999'
@@ -4061,47 +3243,12 @@
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
-        'detail'   => 'invalid MAX_FW_TIMEOUT',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => $server_rewrite_conf_files,
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE                 any',
-            'KEY                    testtest',
-            'MAX_FW_TIMEOUT         999999999999'
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/not\sin\srange/],
-    },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'MAX_FW_TIMEOUT < FW_ACCESS_TIMEOUT',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --dump-config",
-        'exec_err' => $NO,
-        'server_access_file' => [
-            'SOURCE                 any',
-            'KEY                    testtest',
-            'FW_ACCESS_TIMEOUT      30',
-            'MAX_FW_TIMEOUT         20'
-        ],
-        'server_conf_file' => [
-            '### comment'
-        ],
-        'positive_output_matches' => [qr/honoring\sMAX_FW_TIMEOUT/],
-    },
-
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
         'detail'   => 'invalid ENCRYPTION_MODE',
         'function' => \&server_conf_files,
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                 any',
             'KEY                    testtest',
             'ENCRYPTION_MODE        invalid'
@@ -4119,6 +3266,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                 any',
             'KEY                    testtest',
             'CMD_EXEC_USER          invalid'
@@ -4136,6 +3284,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                 any',
             'KEY                    testtest',
             'CMD_EXEC_GROUP         invalid'
@@ -4154,6 +3303,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4170,6 +3320,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4186,6 +3337,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4202,6 +3354,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4217,30 +3370,11 @@
         'subcategory' => 'server',
         'detail'   => 'FORCE_SNAT -> FORCE_NAT/FORWARD_ALL',
         'function' => \&generic_exec,
-        'cmdline' =>  qq/$fwknopdCmd -c $cf{"${fw_conf_prefix}_nat"} -a $cf{'require_force_nat_access'} / .
+        'cmdline' =>  qq/$fwknopdCmd $srv_sdp_options -c $cf{"${fw_conf_prefix}_nat"} -a $cf{'require_force_nat_access'} / .
             "-d $default_digest_file -p $default_pid_file $intf_str --exit-parse-config",
         'positive_output_matches' => [qr/requires either FORCE_NAT or FORWARD_ALL/i],
         'exec_err' => $YES,
     },
-    {
-        'category' => 'basic operations',
-        'subcategory' => 'server',
-        'detail'   => 'FORCE_NAT -> need forwarding mode',
-        'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
-        'exec_err' => $YES,
-        'server_access_file' => [
-            'SOURCE                  any',
-            'KEY                     testtest',
-            'FORCE_NAT               Y'
-        ],
-        'server_conf_file' => [
-            "ENABLE_${FW_PREFIX}_FORWARDING       N;",
-            "ENABLE_${FW_PREFIX}_LOCAL_NAT        N;"
-        ],
-        'positive_output_matches' => [qr/requires either ENABLE_${FW_PREFIX}_FORWARDING/i],
-    },
-
     {
         'category' => 'basic operations',
         'subcategory' => 'server',
@@ -4249,6 +3383,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE                  any',
             'KEY                     testtest',
             'FORCE_MASQUERADE        Y'
@@ -4268,6 +3403,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4284,6 +3420,7 @@
         'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4300,6 +3437,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     any',
             'KEY        testtest'
         ],
@@ -4317,6 +3455,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/aaaaaaaaaaaaaaaaaaaaa',
             'KEY        testtest'
         ],
@@ -4333,6 +3472,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     aaaaaaaaaaaaaaaaaaaaa',
             'KEY        testtest'
         ],
@@ -4349,6 +3489,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     123.123.123.123/255.255.255.258',
             'KEY        testtest'
         ],
@@ -4365,6 +3506,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     123.123.123.123/33',
             'KEY        testtest'
         ],
@@ -4381,6 +3523,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/1234.1.1.1',
             'KEY        testtest'
         ],
@@ -4397,6 +3540,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/255.255.255.0, 2.2.2.2/33, 123.123.123.123/24',
             'KEY        testtest'
         ],
@@ -4413,6 +3557,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/',
             'KEY        testtest'
         ],
@@ -4429,6 +3574,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/0',
             'KEY        testtest'
         ],
@@ -4445,6 +3591,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1/299.255.255.0',
             'KEY        testtest'
         ],
@@ -4463,6 +3610,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/aaaaaaaaaaaaaaaaaaaaaa',
             'KEY          testtest'
@@ -4480,6 +3628,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  aaaaaaaaaaaaaaaaaaaaaa',
             'KEY          testtest'
@@ -4497,6 +3646,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  123.123.123.123/255.255.255.258',
             'KEY          testtest'
@@ -4514,6 +3664,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  123.123.123.123/33',
             'KEY          testtest'
@@ -4531,6 +3682,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/1234.1.1.1',
             'KEY          testtest'
@@ -4548,6 +3700,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/255.255.255.0, 2.2.2.2/33, 123.123.123.123/24',
             'KEY          testtest'
@@ -4565,6 +3718,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/',
             'KEY          testtest'
@@ -4582,6 +3736,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/0',
             'KEY          testtest'
@@ -4599,6 +3754,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+        	"SDP_ID     $sdp_client_id",
             'SOURCE       any',
             'DESTINATION  1.1.1.1/299.255.255.0',
             'KEY          testtest'
@@ -4617,6 +3773,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE       1.1.1.1',
             'OPEN_PORTS   tcp',
             'KEY          testtest'
@@ -4634,6 +3791,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+         	"SDP_ID     $sdp_client_id",
             'SOURCE       1.1.1.1',
             'OPEN_PORTS   icmp/22',
             'KEY          testtest'
@@ -4651,7 +3809,8 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
-            'SOURCE       1.1.1.1',
+            "SDP_ID     $sdp_client_id",
+			'SOURCE       1.1.1.1',
             'OPEN_PORTS   tcp/22, udp/53, tcp/12345, udp/123, icmp/1, tcp/23',
             'KEY          testtest'
         ],
@@ -4669,6 +3828,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE     1.1.1.1',
             'OPEN_PORTS   tcp/22, udp/53, tcp/12345, udp/123, icmp/1, tcp/23',
         ],
@@ -4701,6 +3861,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE          1.1.1.1',
             'DESTINATION     1.2.3.4',
         ],
@@ -4718,6 +3879,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'KEY    ' . 'A'x1200
         ],
@@ -4734,13 +3896,14 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_NAT a a'
         ],
         'server_conf_file' => [
-            "ENABLE_${FW_PREFIX}_FORWARDING      Y"
+            '### comment line'
         ],
-        'positive_output_matches' => [qr/invalid FORCE_NAT arg/],
+        'positive_output_matches' => [qr/FORCE_NAT requires ENABLE.*FORWARDING/],
     },
     {
         'category' => 'basic operations',
@@ -4750,6 +3913,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_NAT a a'
         ],
@@ -4766,6 +3930,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_NAT 1.2.3.4 999999'
         ],
@@ -4782,6 +3947,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_NAT 1.2.3.4.9 1234'
         ],
@@ -4798,6 +3964,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_SNAT 1.2.3.4.9 1234'
         ],
@@ -4814,6 +3981,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_SNAT a'
         ],
@@ -4830,13 +3998,14 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE any',
             'FORCE_SNAT a'
         ],
         'server_conf_file' => [
             "ENABLE_${FW_PREFIX}_FORWARDING      N"
         ],
-        'positive_output_matches' => [qr/FORCE_SNAT requires either/],
+        'positive_output_matches' => [qr/FORCE_SNAT requires ENABLE.*FORWARDING/],
     },
     {
         'category' => 'basic operations',
@@ -4846,6 +4015,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE         any',
             'KEY            testtest',
             'FORCE_SNAT     1.2.3.4'
@@ -4860,9 +4030,10 @@
         'subcategory' => 'server',
         'detail'   => "$FW_TYPE FORCE_SNAT and 0.0.0.0 0",
         'function' => \&server_conf_files,
-        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config -D",
+        'fwknopd_cmdline' => "$server_rewrite_conf_files --exit-parse-config",
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE         any',
             'KEY            testtest',
             'FORCE_SNAT     1.2.3.4',
@@ -4882,6 +4053,7 @@
         'fwknopd_cmdline' => $server_rewrite_conf_files,
         'exec_err' => $YES,
         'server_access_file' => [
+            "SDP_ID     $sdp_client_id",
             'SOURCE                 any',
             'KEY                    testtest',
             'FORCE_MASQUERADE       Y'

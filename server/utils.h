@@ -1,11 +1,12 @@
-/**
- * \file server/utils.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for utils.c fwknopd server program.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    utils.h
+ *
+ * Purpose: Header file for utils.c fwknopd server program.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -53,18 +54,23 @@
     x == '#' || x == '\n' || x == '\r' || x == ';' || x == '\0' \
 )
 
-#define IS_DIR  1
-#define IS_EXE  2
-#define IS_FILE 3
+#define IS_DIR 1
+#define IS_EXE 2
 
 /* Prototypes
 */
+void  hex_dump(const unsigned char *data, const int size);
 char* dump_ctx(fko_ctx_t ctx);
 int   is_valid_dir(const char *path);
 int   is_valid_exe(const char *path);
-int   is_valid_file(const char *path);
 int   verify_file_perms_ownership(const char *file);
+void  chop_newline(char *str);
+void  chop_char(char *str, const char chop);
+void  chop_spaces(char *str);
 void  truncate_partial_line(char *str);
 int   is_digits(const char * const str);
+int   strtoargv(const char * const args_str, char **argv_new, int *argc_new,
+        const fko_srv_options_t * const opts);
+void  free_argv(char **argv_new, int *argc_new);
 
 #endif  /* UTILS_H */

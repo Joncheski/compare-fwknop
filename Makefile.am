@@ -51,6 +51,7 @@ EXTRA_DIST = \
     android/project/jni/logutils.h \
     android/project/jni/Android.mk \
     ChangeLog \
+    ChangeLog.git \
     CREDITS \
     extras/upstart/fwknop.conf \
     extras/fwknop.init.debian \
@@ -70,7 +71,6 @@ EXTRA_DIST = \
     extras/console-qr/console-qr.sh \
     extras/sanitizer/asan-build.sh \
     extras/sanitizer/ubsan-build.sh \
-    extras/clang/scan-build.sh \
     fwknop.spec \
     iphone/main.m \
     iphone/Fwknop.xcodeproj \
@@ -122,7 +122,6 @@ EXTRA_DIST = \
     python/fkomodule.c \
     python/fko.py \
     test/conf/gpg_dirs.tar.gz \
-    test/conf/access-include.tar.gz \
     test/conf/hmac_android_access.conf \
     test/conf/hmac_android_fdroid_access.conf \
     test/conf/android_access.conf \
@@ -136,16 +135,11 @@ EXTRA_DIST = \
     test/conf/default_access.conf \
     test/conf/default_fwknopd.conf \
     test/conf/portrange_fwknopd.conf \
-    test/conf/prepend_fwknopd.conf \
-    test/conf/firewd_no_nat_dns_fwknopd.conf \
-    test/conf/ipt_no_nat_dns_fwknopd.conf \
     test/conf/ipt_custom_input_chain_fwknopd.conf \
     test/conf/firewd_custom_input_chain_fwknopd.conf \
     test/conf/ipt_custom_nat_chain_fwknopd.conf \
     test/conf/firewd_custom_nat_chain_fwknopd.conf \
     test/conf/gpg_invalid_exe_access.conf \
-    test/conf/ipt_nat_disable_aging_fwknopd.conf \
-    test/conf/firewd_nat_disable_aging_fwknopd.conf \
     test/conf/disable_aging_fwknopd.conf \
     test/conf/disable_aging_nat_fwknopd.conf \
     test/conf/dual_key_usage_access.conf \
@@ -160,14 +154,6 @@ EXTRA_DIST = \
     test/conf/fuzzing_restrict_ports_access.conf \
     test/conf/fuzzing_source_access.conf \
     test/conf/hmac_fuzzing_access.conf \
-    test/conf/include1_hmac_access.conf \
-    test/conf/include2_hmac_access.conf \
-    test/conf/include3_hmac_access.conf \
-    test/conf/include_def_hmac_access.conf \
-    test/conf/include_keys1_hmac_access.conf \
-    test/conf/include_m1_hmac_access.conf \
-    test/conf/include_r1_hmac_access.conf \
-    test/conf/include_r2_hmac_access.conf \
     test/conf/gpg_access.conf \
     test/conf/gpg_hmac_access.conf \
     test/conf/gpg_no_pw_access.conf \
@@ -193,7 +179,6 @@ EXTRA_DIST = \
     test/conf/fwknoprc_hmac_http_only_resolve \
     test/conf/fwknoprc_gpg_hmac_sha512_key \
     test/conf/gpg_hmac_sha512_access.conf \
-    test/conf/gpg_hmac_sha3_512_access.conf \
     test/conf/fwknoprc_hmac_sha512_base64_key \
     test/conf/fwknoprc_hmac_multi_base64_key \
     test/conf/gpg_no_pw_hmac_sha512_access.conf \
@@ -234,8 +219,6 @@ EXTRA_DIST = \
     test/conf/hmac_sha384_short_key_access.conf \
     test/conf/hmac_sha384_long_key_access.conf \
     test/conf/hmac_sha512_access.conf \
-    test/conf/hmac_sha3_512_access.conf \
-    test/conf/hmac_sha3_256_access.conf \
     test/conf/hmac_sha512_short_key_access.conf \
     test/conf/hmac_sha512_short_key2_access.conf \
     test/conf/hmac_sha512_long_key_access.conf \
@@ -271,8 +254,6 @@ EXTRA_DIST = \
     test/conf/fwknoprc_hmac_sha384_long_key \
     test/conf/fwknoprc_hmac_sha384_short_key \
     test/conf/fwknoprc_hmac_sha512_key \
-    test/conf/fwknoprc_hmac_sha3_512_key \
-    test/conf/fwknoprc_hmac_sha3_256_key \
     test/conf/fwknoprc_hmac_sha512_short_key \
     test/conf/fwknoprc_hmac_sha512_long_key \
     test/conf/fwknoprc_hmac_simple_keys \
@@ -345,8 +326,6 @@ EXTRA_DIST = \
     test/conf/udp_server_fwknopd.conf \
     test/conf/spa_over_http_fwknopd.conf \
     test/conf/spa_over_http.pcap \
-    test/conf/spa_x_forwarded_for.pcap \
-    test/conf/spa_x_forwarded_for_fwknopd.conf \
     test/conf/ipt_snat_fwknopd.conf \
     test/conf/firewd_snat_fwknopd.conf \
     test/conf/ipt_snat_no_translate_ip_fwknopd.conf \
@@ -363,6 +342,24 @@ EXTRA_DIST = \
     test/conf/hmac_spa_destination5_access.conf \
     test/conf/spa_replay.pcap \
     test/conf/fcs_spa.pcap \
+    test/conf/sdp-ctrl-client/ca.crt \
+    test/conf/sdp-ctrl-client/ca.key \
+    test/conf/sdp-ctrl-client/ca.srl \
+    test/conf/sdp-ctrl-client/client.crt \
+    test/conf/sdp-ctrl-client/client.fwknoprc \
+    test/conf/sdp-ctrl-client/client.key \
+    test/conf/sdp-ctrl-client/client_sdp_ctrl_client.conf \
+    test/conf/sdp-ctrl-client/config.js \
+    test/conf/sdp-ctrl-client/fwknopd.conf \
+    test/conf/sdp-ctrl-client/mysql_login.conf \
+    test/conf/sdp-ctrl-client/sdp_test_cleanup.sql \
+    test/conf/sdp-ctrl-client/sdp_test_create.sql \
+    test/conf/sdp-ctrl-client/sdp_test_destroy.sql \
+    test/conf/sdp-ctrl-client/sdp_test_setup.sql \
+    test/conf/sdp-ctrl-client/server.crt \
+    test/conf/sdp-ctrl-client/server.fwknoprc \
+    test/conf/sdp-ctrl-client/server.key \
+    test/conf/sdp-ctrl-client/server_sdp_ctrl_client.conf \
     test/fko-wrapper/Makefile \
     test/fko-wrapper/fko_wrapper.c \
     test/fko-wrapper/fko_basic.c \
@@ -446,7 +443,6 @@ EXTRA_DIST = \
     test/afl/test-cases/server-conf/iptables/fwknopd.conf \
     test/tests/address_sanitizer.pl \
     test/tests/build_security.pl \
-    test/tests/cunit_tests.pl \
     test/tests/preliminaries.pl \
     test/tests/code_structure.pl \
     test/tests/configure_args.pl \
@@ -469,6 +465,7 @@ EXTRA_DIST = \
     test/tests/rijndael.pl \
     test/tests/rijndael_cmd_exec.pl \
     test/tests/rijndael_hmac_cmd_open_close.pl \
+    test/tests/sdp.pl \
     test/hardening-check \
     test/local_spa.key \
     test/invalid.key \
@@ -522,6 +519,18 @@ uninstall-local:
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; then \
 		rm -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; \
+	fi
 
 install-exec-hook:
 	if test -d $(DESTDIR)$(sysconfdir)/fwknop; then \
@@ -539,11 +548,29 @@ install-exec-hook:
 			mv $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst $(DESTDIR)$(sysconfdir)/fwknop/access.conf; \
 		fi \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then :; \
+	else \
+		if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+			mv $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+		fi \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then :; \
+	else \
+		if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+			mv $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+		fi \
+	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf.inst; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf.inst; \
 	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; \
 	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf; \
@@ -551,3 +578,10 @@ install-exec-hook:
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/access.conf; \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+	fi
+	

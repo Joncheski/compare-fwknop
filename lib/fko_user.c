@@ -1,11 +1,12 @@
-/**
- * \file lib/fko_user.c
+/*
+ *****************************************************************************
  *
- * \brief Set/Get the current username.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_user.c
+ *
+ * Purpose: Set/Get the current username.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -30,9 +31,7 @@
 #include "fko_common.h"
 #include "fko.h"
 
-#ifdef __MINGW32__
-  #include "../win32/getlogin.h"
-#elif WIN32
+#ifdef WIN32
   #include <getlogin.h>
 #endif
 
@@ -53,7 +52,7 @@ fko_set_username(fko_ctx_t ctx, const char * const spoof_user)
     if(!CTX_INITIALIZED(ctx))
         return FKO_ERROR_CTX_NOT_INITIALIZED;
 
-    /* If spoof_user was not passed in, check for a SPOOF_USER environment
+    /* If spoof_user was not passed in, check for a SPOOF_USER enviroment
      * variable.  If it is set, use its value.
     */
     if(spoof_user != NULL && spoof_user[0] != '\0')
@@ -115,7 +114,7 @@ fko_set_username(fko_ctx_t ctx, const char * const spoof_user)
         return res;
     }
 
-    /* Just in case this is a subsequent call to this function.  We
+    /* Just in case this is a subsquent call to this function.  We
      * do not want to be leaking memory.
     */
     if(ctx->username != NULL)
@@ -175,7 +174,7 @@ validate_username(const char *username)
     */
     for (i=0; i < (int)strnlen(username, MAX_SPA_USERNAME_SIZE); i++)
     {
-        if((isalnum((int)(unsigned char)username[i]) == 0)
+        if((isalnum(username[i]) == 0)
                 && ((username[i] < 0x20 || username[i] > 0x7e)
                 /* Not allowed chars: " / \ [ ] : ; | = , + * ? < >
                 */

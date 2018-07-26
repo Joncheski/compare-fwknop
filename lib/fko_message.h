@@ -1,11 +1,12 @@
-/**
- * \file lib/fko_message.h
+/*
+ *****************************************************************************
  *
- * \brief Provide validation functions for SPA messages
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_message.h
+ *
+ * Purpose: Provide validation functions for SPA messages
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -34,6 +35,7 @@
 /* SPA message format validation functions.
 */
 int validate_cmd_msg(const char *msg);
+int validate_service_access_msg(const char *msg);
 int validate_access_msg(const char *msg);
 int validate_nat_access_msg(const char *msg);
 int validate_proto_port_spec(const char *msg);

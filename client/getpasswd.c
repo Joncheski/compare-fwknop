@@ -1,11 +1,12 @@
-/**
- * \file client/getpasswd.c
+/*
+ *****************************************************************************
  *
- * \brief Routines for obtaining a password from a user.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    getpasswd.c
+ *
+ * Purpose: Routines for obtaining a password from a user.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -123,7 +124,7 @@ read_passwd_from_stream(FILE *stream)
  * @param fd     File descriptor to use to read the pasword from. If fd is set
  *               to FD_INVALID, then a new stream is opened.
  *
- * @return NULL if a problem occurred or the user killed the terminal (Ctrl-C)\n
+ * @return NULL if a problem occured or the user killed the terminal (Ctrl-C)\n
  *         otherwise the password - empty password is accepted.
  */
 char*
@@ -175,7 +176,7 @@ getpasswd(const char *prompt, int fd)
         * Save current tty state for later restoration after we :
         *   - disable echo of characters to the tty
         *   - disable signal generation
-        *   - disable canonical mode (input read line by line mode)
+        *   - disable cannonical mode (input read line by line mode)
         */
         tcgetattr(fileno(fp), &ts);
         old_c_lflag = ts.c_lflag;

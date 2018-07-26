@@ -1,12 +1,13 @@
-/**
- * \file client/http_resolve_host.c
+/*
+ *****************************************************************************
  *
- * \brief Routine for using an http request to obtain a client's IP
+ * File:    http_resolve_host.c
+ *
+ * Purpose: Routine for using an http request to obtain a client's IP
  *          address as seen from the outside world.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -202,7 +203,7 @@ try_url(struct url *url, fko_cli_options_t *options)
      *       (possibly followed by whitespace or other not-digit value).
      */
     for(i=0; i<MAX_IPV4_STR_LEN; i++) {
-        if(! isdigit((int)(unsigned char)*(ndx+i)) && *(ndx+i) != '.')
+        if(! isdigit(*(ndx+i)) && *(ndx+i) != '.')
             break;
     }
 
@@ -334,7 +335,7 @@ resolve_ip_https(fko_cli_options_t *options)
     int     pipe_fd[2];
     pid_t   pid=0;
     FILE   *output;
-    int     status, es = 0;
+    int     status;
 #else
     FILE *wget;
 #endif
@@ -411,7 +412,7 @@ resolve_ip_https(fko_cli_options_t *options)
 #endif
 
 #if HAVE_EXECVPE
-    if(strtoargv(wget_ssl_cmd, wget_argv, &wget_argc) != 1)
+    if(strtoargv(wget_ssl_cmd, wget_argv, &wget_argc, options) != 1)
     {
         log_msg(LOG_VERBOSITY_ERROR, "Error converting wget cmd str to argv");
         return(-1);
@@ -434,17 +435,7 @@ resolve_ip_https(fko_cli_options_t *options)
         close(pipe_fd[0]);
         dup2(pipe_fd[1], STDOUT_FILENO);
         dup2(pipe_fd[1], STDERR_FILENO);
-        es = execvpe(wget_argv[0], wget_argv, (char * const *)NULL); /* don't use env */
-
-        if(es == -1)
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "[*] resolve_ip_https(): execvpe() failed: %s",
-                    strerror(errno));
-
-        /* We only make it here if there was a problem with execvpe(),
-         * so exit() here either way
-        */
-        exit(es);
+        execvpe(wget_argv[0], wget_argv, (char * const *)NULL); /* don't use env */
     }
     else if(pid == -1)
     {
@@ -497,7 +488,7 @@ resolve_ip_https(fko_cli_options_t *options)
     {
         ndx = resp;
         for(i=0; i<MAX_IPV4_STR_LEN; i++) {
-            if(! isdigit((int)(unsigned char)*(ndx+i)) && *(ndx+i) != '.')
+            if(! isdigit(*(ndx+i)) && *(ndx+i) != '.')
                 break;
         }
         *(ndx+i) = '\0';

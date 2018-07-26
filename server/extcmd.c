@@ -1,11 +1,12 @@
-/**
- * \file server/extcmd.c
+/*
+ *****************************************************************************
  *
- * \brief Routines for executing and processing external commands.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    extcmd.c
+ *
+ * Purpose: Routines for executing and processing external commands.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -126,7 +127,6 @@ _run_extcmd(uid_t uid, gid_t gid, const char *cmd, char *so_buf,
     FILE   *output;
     int     retval = EXTCMD_SUCCESS_ALL_OUTPUT;
     int     line_ctr = 0, found_str = 0, do_break = 0;
-    int     es = 0;
 
     char   *argv_new[MAX_CMDLINE_ARGS]; /* for validation and/or execvpe() */
     int     argc_new=0;
@@ -148,7 +148,7 @@ _run_extcmd(uid_t uid, gid_t gid, const char *cmd, char *so_buf,
     */
     memset(argv_new, 0x0, sizeof(argv_new));
 
-    if(strtoargv(cmd, argv_new, &argc_new) != 1)
+    if(strtoargv(cmd, argv_new, &argc_new, opts) != 1)
     {
         log_msg(LOG_ERR,
                 "run_extcmd(): Error converting cmd str to argv via strtoargv()");
@@ -204,16 +204,7 @@ _run_extcmd(uid_t uid, gid_t gid, const char *cmd, char *so_buf,
 
         /* don't use env
         */
-        es = execvpe(argv_new[0], argv_new, (char * const *)NULL);
-
-        if(es == -1)
-            log_msg(LOG_ERR, "run_extcmd(): execvpe() failed: %s", strerror(errno));
-
-        /* We only make it here if there was a problem with execvpe(),
-         * so exit() here either way to not leave another fwknopd process
-         * running after fork().
-        */
-        exit(es);
+        execvpe(argv_new[0], argv_new, (char * const *)NULL);
     }
     else if(pid == -1)
     {
@@ -607,7 +598,7 @@ int _run_extcmd_write(const char *cmd, const char *cmd_write, int *pid_status,
     */
     memset(argv_new, 0x0, sizeof(argv_new));
 
-    if(strtoargv(cmd, argv_new, &argc_new) != 1)
+    if(strtoargv(cmd, argv_new, &argc_new, opts) != 1)
     {
         log_msg(LOG_ERR,
                 "run_extcmd_write(): Error converting cmd str to argv via strtoargv()");

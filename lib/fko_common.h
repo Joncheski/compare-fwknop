@@ -1,11 +1,12 @@
-/**
- * \file lib/fko_common.h
+/*
+ *****************************************************************************
  *
- * \brief Common header for libfko source files.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_common.h
+ *
+ * Purpose: Common header for libfko source files.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -72,7 +73,7 @@
   #define O_WRONLY    _O_WRONLY
   #define O_RDONLY    _O_RDONLY
   #define O_RDWR      _O_RDWR
-  #define O_CREAT     _O_CREAT
+  #define O_CREAT     _O_CREAT 
   #define O_EXCL      _O_EXCL
   #define S_IRUSR     _S_IREAD
   #define S_IWUSR     _S_IWRITE
@@ -89,15 +90,13 @@
   #endif
 #endif
 
-/* Work out endianness
+#include <inttypes.h>
+
+/* Work out endianess (sp?)
 */
-#ifdef HAVE_ENDIAN_H
+#if HAVE_ENDIAN_H       /* Should cover most Linux systems */
   #include <endian.h>
-  #if defined(BYTE_ORDER) /* POSIX proposal */
-    #define BYTEORDER BYTE_ORDER
-  #elif defined(__BYTE_ORDER) /* older systems? */
-    #define BYTEORDER __BYTE_ORDER
-  #endif
+  #define BYTEORDER __BYTE_ORDER
 #elif HAVE_SYS_ENDIAN_H /* FreeBSD has a sys/endian.h */
   #include <sys/endian.h>
   #define BYTEORDER _BYTE_ORDER

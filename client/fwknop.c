@@ -1,11 +1,10 @@
 /**
- * \file    client/fwknop.c
+ * @file    fwknop.c
  *
- * \brief   The fwknop client.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * @brief   The fwknop client.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -31,6 +30,8 @@
 #include "spa_comm.h"
 #include "utils.h"
 #include "getpasswd.h"
+#include "sdp_ctrl_client.h"
+
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -55,10 +56,13 @@ static int set_access_buf(fko_ctx_t ctx, fko_cli_options_t *options,
 static int get_rand_port(fko_ctx_t ctx);
 int resolve_ip_https(fko_cli_options_t *options);
 int resolve_ip_http(fko_cli_options_t *options);
+static pid_t run_sdp_ctrl_client(fko_cli_options_t *options);
 static void clean_exit(fko_ctx_t ctx, fko_cli_options_t *opts,
     char *key, int *key_len, char *hmac_key, int *hmac_key_len,
     unsigned int exit_status);
 static void zero_buf_wrapper(char *buf, int len);
+static int is_hostname_str_with_port(const char *str,
+        char *hostname, size_t hostname_bufsize, int *port);
 #if HAVE_LIBFIU
 static int enable_fault_injections(fko_cli_options_t * const opts);
 #endif
@@ -75,6 +79,81 @@ static int enable_fault_injections(fko_cli_options_t * const opts);
 #define HOSTNAME_BUFSIZE            64                  /*!< Maximum size of a hostname string */
 #define CTX_DUMP_BUFSIZE            4096                /*!< Maximum size allocated to a FKO context dump */
 
+/**
+ * @brief Check whether a string is an ipv6 address or not
+ *
+ * @param str String to check for an ipv6 address.
+ *
+ * @return 1 if the string is an ipv6 address, 0 otherwise.
+ */
+static int
+is_ipv6_str(char *str)
+{
+    return 0;
+}
+
+/**
+ * @brief Check a string to find out if it is built as 'hostname,port'
+ *
+ * This function check if we can extract an hostname and a port from the string.
+ * If yes, we return 1, and both the hostname buffer and the port number are set
+ * accordingly.
+ *
+ * We could have used sscanf() here with a template "%[^,],%u", but this way we
+ * do not limit the size of the value copy in the hostname destination buffer.
+ * Limiting the string in the sscanf() can be done but would prevent any easy change
+ * for the hostname buffer size.
+ *
+ * @param str String to parse.
+ * @param hostname Buffer where to store the hostname value read from @str.
+ * @param hostname_bufsize Hostname buffer size.
+ * @param port Value of the port read from @str.
+ *
+ * @return 1 if the string is built as 'hostname,port', 0 otherwise.
+ */
+static int
+is_hostname_str_with_port(const char *str, char *hostname, size_t hostname_bufsize, int *port)
+{
+    int     valid = 0;                /* Result of the function */
+    char    buf[MAX_LINE_LEN] = {0};  /* Copy of the buffer eg. "hostname,port" */
+    char   *h;                        /* Pointer on the hostname string */
+    char   *p;                        /* Ponter on the port string */
+
+    memset(hostname, 0, hostname_bufsize);
+    *port = 0;
+
+    /* Replace the comma in the string with a NULL char to split the
+     * buffer in two strings (hostname and port) */
+    strlcpy(buf, str, sizeof(buf));
+    p = strchr(buf, ',');
+
+    if(p != NULL)
+    {
+        *p++ = 0;
+        h = buf;
+
+        *port = atoi(p);
+
+        /* If the string does not match an ipv4 or ipv6 address we assume this
+         * is an hostname. We make sure the port is in the good range too */
+        if (   (is_valid_ipv4_addr(buf) == 0)
+            && (is_ipv6_str(buf) == 0)
+            && ((*port > 0) && (*port < 65536)) )
+        {
+            strlcpy(hostname, h, hostname_bufsize);
+            valid = 1;
+        }
+
+        /* The port is out of range or the ip is an ipv6 or ipv4 address */
+        else;
+    }
+
+    /* No port found in the string, let's skip */
+    else;
+
+    return valid;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -88,6 +167,7 @@ main(int argc, char **argv)
     int                 key_len = 0, orig_key_len = 0, hmac_key_len = 0, enc_mode;
     int                 tmp_port = 0;
     char                dump_buf[CTX_DUMP_BUFSIZE];
+    uint32_t            sdp_id = 0;
 
     fko_cli_options_t   options;
 
@@ -99,6 +179,8 @@ main(int argc, char **argv)
     /* Handle command line
     */
     config_init(&options, argc, argv);
+
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : completed config_init");
 
 #if HAVE_LIBFIU
         /* Set any fault injection points early
@@ -221,15 +303,17 @@ main(int argc, char **argv)
             }
         }
 
-        /* Set a message string by combining the allow IP and the
-         * port/protocol.  The fwknopd server allows no port/protocol
-         * to be specified as well, so in this case append the string
-         * "none/0" to the allow IP.
+       /* Set a message string by combining the allow IP and either
+        * service IDs or port/protocol.  The fwknopd server allows no
+        * service or port/protocol to be specified as well, so in this
+        * case append the string "none/0" to the allow IP.
         */
         if(set_access_buf(ctx, &options, access_buf) != 1)
             clean_exit(ctx, &options, key, &key_len,
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
+
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_set_spa_message...");
     res = fko_set_spa_message(ctx, access_buf);
     if(res != FKO_SUCCESS)
     {
@@ -237,11 +321,14 @@ main(int argc, char **argv)
         clean_exit(ctx, &options, key, &key_len,
             hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_set_spa_message");
 
-    /* Set NAT access string
+    /* Set NAT access string if service IDs were not requested
     */
-    if (options.nat_local || options.nat_access_str[0] != 0x0)
+    if (options.service_ids_str[0] == 0x0 &&
+       (options.nat_local || options.nat_access_str[0] != 0x0))
     {
+        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling set_nat_access...");
         res = set_nat_access(ctx, &options, access_buf);
         if(res != FKO_SUCCESS)
         {
@@ -249,6 +336,7 @@ main(int argc, char **argv)
             clean_exit(ctx, &options, key, &key_len,
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
         }
+        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from set_nat_access");
     }
 
     /* Set username
@@ -263,6 +351,33 @@ main(int argc, char **argv)
                     hmac_key, &hmac_key_len, EXIT_FAILURE);
         }
     }
+
+    /* Set SDP mode on or off
+     */
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : checking option disable_sdp_mode...");
+    if(options.disable_sdp_mode)
+    {
+        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_set_disable_sdp_mode...");
+        res = fko_set_disable_sdp_mode(ctx, options.disable_sdp_mode);
+        if(res != FKO_SUCCESS)
+        {
+            errmsg("fko_set_disable_sdp_mode", res);
+            clean_exit(ctx, &options, key, &key_len,
+                    hmac_key, &hmac_key_len, EXIT_FAILURE);
+        }
+        log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_set_disable_sdp_mode");
+    }
+    else
+    {
+        res = fko_set_sdp_id(ctx, options.sdp_id);
+        if(res != FKO_SUCCESS)
+        {
+            errmsg("fko_set_sdp_id", res);
+            clean_exit(ctx, &options, key, &key_len,
+                    hmac_key, &hmac_key_len, EXIT_FAILURE);
+        }
+    }
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : finished checking option disable_sdp_mode");
 
     /* Set up for using GPG if specified.
     */
@@ -392,6 +507,7 @@ main(int argc, char **argv)
 
     /* Finalize the context data (encrypt and encode the SPA data)
     */
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : calling fko_spa_data_final...");
     res = fko_spa_data_final(ctx, key, key_len, hmac_key, hmac_key_len);
     if(res != FKO_SUCCESS)
     {
@@ -402,6 +518,7 @@ main(int argc, char **argv)
         clean_exit(ctx, &options, key, &orig_key_len,
                 hmac_key, &hmac_key_len, EXIT_FAILURE);
     }
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : returned from fko_spa_data_final");
 
     /* Display the context data.
     */
@@ -448,6 +565,21 @@ main(int argc, char **argv)
     }
 
     res = send_spa_packet(ctx, &options);
+
+    // before checking result of the packet send, start the SDP control
+    // client if configured to do so
+    if( !options.disable_sdp_ctrl_client
+            //&& options.sdp_ctrl_client_config_file != NULL
+            && options.sdp_ctrl_client_config_file[0] != '\0')
+    {
+        if(run_sdp_ctrl_client(&options) == 0)
+        {
+            // this is the child process, stop here
+            clean_exit(ctx, &options, key, &orig_key_len,
+                    hmac_key, &hmac_key_len, EXIT_SUCCESS);
+        }
+    }
+
     if(res < 0)
     {
         log_msg(LOG_VERBOSITY_ERROR, "send_spa_packet: packet not sent.");
@@ -501,8 +633,20 @@ main(int argc, char **argv)
          * This also verifies the HMAC and truncates it if there are no
          * problems.
         */
+        res = fko_get_sdp_id(ctx, &sdp_id);
+        if(res != FKO_SUCCESS)
+        {
+            errmsg("fko_get_sdp_id", res);
+            if(fko_destroy(ctx2) == FKO_ERROR_ZERO_OUT_DATA)
+                log_msg(LOG_VERBOSITY_ERROR,
+                        "[*] Could not zero out sensitive data buffer.");
+            ctx2 = NULL;
+            clean_exit(ctx, &options, key, &orig_key_len,
+                hmac_key, &hmac_key_len, EXIT_FAILURE);
+        }
+
         res = fko_new_with_data(&ctx2, spa_data, NULL,
-            0, enc_mode, hmac_key, hmac_key_len, options.hmac_type);
+            0, enc_mode, hmac_key, hmac_key_len, options.hmac_type, sdp_id);
         if(res != FKO_SUCCESS)
         {
             errmsg("fko_new_with_data", res);
@@ -575,14 +719,12 @@ main(int argc, char **argv)
             clean_exit(ctx, &options, key, &orig_key_len,
                 hmac_key, &hmac_key_len, EXIT_FAILURE);
         }
-        /* Only dump out the SPA data after the test in verbose mode */
-        if (options.verbose) {
-            res = dump_ctx_to_buffer(ctx2, dump_buf, sizeof(dump_buf));
-            if (res == FKO_SUCCESS)
-                log_msg(LOG_VERBOSITY_NORMAL, "\nDump of the Decoded Data\n%s", dump_buf);
-            else
-                log_msg(LOG_VERBOSITY_WARNING, "Unable to dump FKO context: %s", fko_errstr(res));
-        }
+
+        res = dump_ctx_to_buffer(ctx2, dump_buf, sizeof(dump_buf));
+        if (res == FKO_SUCCESS)
+            log_msg(LOG_VERBOSITY_NORMAL, "\nDump of the Decoded Data\n%s", dump_buf);
+        else
+            log_msg(LOG_VERBOSITY_WARNING, "Unable to dump FKO context: %s", fko_errstr(res));
 
         if(fko_destroy(ctx2) == FKO_ERROR_ZERO_OUT_DATA)
             log_msg(LOG_VERBOSITY_ERROR,
@@ -592,6 +734,8 @@ main(int argc, char **argv)
 
     clean_exit(ctx, &options, key, &orig_key_len,
             hmac_key, &hmac_key_len, EXIT_SUCCESS);
+
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop main() : Supposedly exiting successfully, code is: %d", EXIT_SUCCESS);
 
     return EXIT_SUCCESS;  /* quiet down a gcc warning */
 }
@@ -658,6 +802,34 @@ get_rand_port(fko_ctx_t ctx)
     return port;
 }
 
+/* See if the string is of the format "<ipv4 addr>:<port>",
+ */
+static int
+ipv4_str_has_port(char *str)
+{
+    int o1, o2, o3, o4, p;
+
+    /* Force the ':' (if any) to a ','
+    */
+    char *ndx = strchr(str, ':');
+    if(ndx != NULL)
+        *ndx = ',';
+
+    /* Check format and values.
+    */
+    if((sscanf(str, "%u.%u.%u.%u,%u", &o1, &o2, &o3, &o4, &p)) == 5
+        && o1 >= 0 && o1 <= 255
+        && o2 >= 0 && o2 <= 255
+        && o3 >= 0 && o3 <= 255
+        && o4 >= 0 && o4 <= 255
+        && p  >  0 && p  <  65536)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
 /* Set access buf
 */
 static int
@@ -666,7 +838,12 @@ set_access_buf(fko_ctx_t ctx, fko_cli_options_t *options, char *access_buf)
     char   *ndx = NULL, tmp_nat_port[MAX_PORT_STR_LEN+1] = {0};
     int     nat_port = 0;
 
-    if(options->access_str[0] != 0x0)
+    if(options->service_ids_str[0] != 0x0)
+    {
+        snprintf(access_buf, MAX_LINE_LEN, "%s%s%s",
+                options->allow_ip_str, ",", options->service_ids_str);
+    }
+    else if(options->access_str[0] != 0x0)
     {
         if (options->nat_rand_port)
         {
@@ -734,9 +911,11 @@ static int
 set_nat_access(fko_ctx_t ctx, fko_cli_options_t *options, const char * const access_buf)
 {
     char                nat_access_buf[MAX_LINE_LEN] = {0};
-    char                tmp_nat_port[MAX_LINE_LEN] = {0};
     char                tmp_access_port[MAX_PORT_STR_LEN+1] = {0}, *ndx = NULL;
-    int                 access_port = 0, i = 0, is_err = 0, hostlen = 0;
+    int                 access_port = 0, i = 0, is_err = 0;
+    char                dst_ip_str[INET_ADDRSTRLEN] = {0};
+    char                hostname[HOSTNAME_BUFSIZE] = {0};
+    int                 port = 0;
     struct addrinfo     hints;
 
     memset(&hints, 0 , sizeof(hints));
@@ -749,7 +928,7 @@ set_nat_access(fko_ctx_t ctx, fko_cli_options_t *options, const char * const acc
     }
     ndx++;
 
-    while(*ndx != '\0' && isdigit((int)(unsigned char)*ndx) && i < MAX_PORT_STR_LEN)
+    while(*ndx != '\0' && isdigit(*ndx) && i < MAX_PORT_STR_LEN)
     {
         tmp_access_port[i] = *ndx;
         ndx++;
@@ -774,64 +953,41 @@ set_nat_access(fko_ctx_t ctx, fko_cli_options_t *options, const char * const acc
 
     if (nat_access_buf[0] == 0x0 && options->nat_access_str[0] != 0x0)
     {
-        /* Force the ':' (if any) to a ','
-        */
-        ndx = strchr(options->nat_access_str, ':');
-        if (ndx != NULL)
-            *ndx = ',';
-
-        ndx = strchr(options->nat_access_str, ',');
-        if (ndx != NULL)
+        if (ipv4_str_has_port(options->nat_access_str))
         {
-            hostlen = ndx - options->nat_access_str; //len of host, up til either comma or null
-            *ndx = 0;
-
-            ndx++;
-            i = 0;
-            while(*ndx != '\0')
-            //if it goes over max length, mark as invalid
-
-            {
-                tmp_nat_port[i] = *ndx;
-                if ((i > MAX_PORT_STR_LEN) || (!isdigit((int)(unsigned char)*ndx)))
-                {
-                    log_msg(LOG_VERBOSITY_ERROR, "[*] Invalid port value in -N arg.");
-                    return FKO_ERROR_INVALID_DATA;
-                }
-                ndx++;
-                i++;
-            }
-            tmp_nat_port[i] = '\0';
-            access_port = strtol_wrapper(tmp_nat_port, 1,
-                        MAX_PORT, NO_EXIT_UPON_ERR, &is_err);
-            if (is_err != FKO_SUCCESS)
-            {
-                log_msg(LOG_VERBOSITY_ERROR, "[*] Invalid port value in -N arg.");
-                return FKO_ERROR_INVALID_DATA;
-            }
-        } else {
-            hostlen = strlen(options->nat_access_str);
+            snprintf(nat_access_buf, MAX_LINE_LEN, "%s",
+                options->nat_access_str);
         }
-
-        if ((access_port < 1) | (access_port > 65535))
-        {
-            log_msg(LOG_VERBOSITY_ERROR, "[*] Invalid port value.");
-            return FKO_ERROR_INVALID_DATA;
-        }
-
-
-        if (is_valid_ipv4_addr(options->nat_access_str, hostlen) || is_valid_hostname(options->nat_access_str, hostlen))
+        else
         {
             snprintf(nat_access_buf, MAX_LINE_LEN, NAT_ACCESS_STR_TEMPLATE,
                 options->nat_access_str, access_port);
         }
-        else
+    }
+
+    /* Check if there is a hostname to resolve as an ip address in the NAT access buffer */
+    if (is_hostname_str_with_port(nat_access_buf, hostname, sizeof(hostname), &port))
+    {
+        /* Speed up the name resolution by forcing ipv4 (AF_INET).
+         * A NULL pointer could be used instead if there is no constraint.
+         * Maybe when ipv6 support will be enable the structure could initialize the
+         * family to either AF_INET or AF_INET6 */
+        hints.ai_family = AF_INET;
+
+        if (resolve_dst_addr(hostname, &hints,
+                    dst_ip_str, sizeof(dst_ip_str), options) != 0)
         {
-            log_msg(LOG_VERBOSITY_ERROR, "[*] Invalid NAT destination '%s' for -N arg.",
-                options->nat_access_str);
+            log_msg(LOG_VERBOSITY_ERROR, "[*] Unable to resolve %s as an ip address",
+                    hostname);
             return FKO_ERROR_INVALID_DATA;
         }
+
+        snprintf(nat_access_buf, MAX_LINE_LEN, NAT_ACCESS_STR_TEMPLATE,
+                dst_ip_str, port);
     }
+
+    /* Nothing to resolve */
+    else;
 
     if(options->nat_rand_port)
     {
@@ -859,19 +1015,10 @@ prev_exec(fko_cli_options_t *options, int argc, char **argv)
     }
     else
     {
-        if(options->no_home_dir)
+        if (get_save_file(args_save_file) != 1)
         {
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "In --no-home-dir mode must set the args save file path with -E");
+            log_msg(LOG_VERBOSITY_ERROR, "Unable to determine args save file");
             return 0;
-        }
-        else
-        {
-            if (get_save_file(args_save_file) != 1)
-            {
-                log_msg(LOG_VERBOSITY_ERROR, "Unable to determine args save file");
-                return 0;
-            }
         }
     }
 
@@ -923,7 +1070,7 @@ run_last_args(fko_cli_options_t *options, const char * const args_save_file)
 {
     FILE           *args_file_ptr = NULL;
     int             argc_new = 0, args_broken = 0;
-    char            args_str[MAX_ARGS_LINE_LEN] = {0};
+    char            args_str[MAX_LINE_LEN] = {0};
     char           *argv_new[MAX_CMDLINE_ARGS];  /* should be way more than enough */
 
     memset(argv_new, 0x0, sizeof(argv_new));
@@ -942,7 +1089,7 @@ run_last_args(fko_cli_options_t *options, const char * const args_save_file)
         args_str[MAX_LINE_LEN-1] = '\0';
         if (options->verbose)
             log_msg(LOG_VERBOSITY_NORMAL, "Executing: %s", args_str);
-        if(strtoargv(args_str, argv_new, &argc_new) != 1)
+        if(strtoargv(args_str, argv_new, &argc_new, options) != 1)
         {
             args_broken = 1;
         }
@@ -1028,7 +1175,14 @@ set_message_type(fko_ctx_t ctx, fko_cli_options_t *options)
 {
     short message_type;
 
-    if(options->server_command[0] != 0x0)
+    if(options->service_ids_str[0] != 0x0)
+    {
+    	if (options->fw_timeout >= 0)
+    		message_type = FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG;
+    	else
+    		message_type = FKO_SERVICE_ACCESS_MSG;
+    }
+    else if(options->server_command[0] != 0x0)
     {
         message_type = FKO_COMMAND_MSG;
     }
@@ -1275,6 +1429,71 @@ enable_fault_injections(fko_cli_options_t * const opts)
 }
 #endif
 
+/* Run the SDP Control Client
+ */
+static pid_t
+run_sdp_ctrl_client(fko_cli_options_t *options)
+{
+    pid_t child_pid = -1;
+    sdp_ctrl_client_t client = NULL;
+
+    int rv = sdp_ctrl_client_new(options->sdp_ctrl_client_config_file,
+                options->rc_file, 1, &client);
+
+    if(rv != SDP_SUCCESS)
+    {
+        log_msg(LOG_VERBOSITY_ERROR, "sdp_ctrl_client_new failed, returned error code: %d\n", rv);
+        return child_pid;
+    }
+
+    sdp_ctrl_client_describe(client);
+
+    rv = sdp_ctrl_client_start(client, &child_pid);
+
+    if(client->foreground)
+    {
+        if(rv != SDP_SUCCESS)
+            log_msg(LOG_VERBOSITY_ERROR, "SDP ctrl client returned error code: %d", rv);
+        else
+            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client ran successfully");
+
+        sdp_ctrl_client_destroy(client);
+
+        // since running in foreground, this is the main
+        // fwknop process, so return to complete other tasks
+        return child_pid;
+    }
+
+    if(child_pid >= 0)
+    {
+        if(child_pid == 0)
+        {
+            // I'm a child, thus I'm the ctrl_client process
+            // If I've returned, I've exited my action loop
+            // Don't execute any further
+
+            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client child process loop has returned.");
+            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client child process return value: %d", rv);
+        }
+        else
+        {
+            // I'm the parent
+            log_msg(LOG_VERBOSITY_INFO, "Parent process returned from sdp_ctrl_client_start. \n");
+            log_msg(LOG_VERBOSITY_INFO, "SDP ctrl client return value: %d\n", rv);
+        }
+    }
+    else
+    {
+        // fork failed
+        log_msg(LOG_VERBOSITY_ERROR, "sdp_ctrl_client_start did not fork, returned error: %d", rv);
+    }
+
+    // parent or child, always free the context
+    sdp_ctrl_client_destroy(client);
+
+    return child_pid;
+}
+
 /* free up memory and exit
 */
 static void
@@ -1296,6 +1515,7 @@ clean_exit(fko_ctx_t ctx, fko_cli_options_t *opts,
     zero_buf_wrapper(hmac_key, *hmac_key_len);
     *key_len = 0;
     *hmac_key_len = 0;
+    log_msg(LOG_VERBOSITY_DEBUG, "fwknop clean_exit() : Supposedly exiting successfully, code is: %d", exit_status);
     exit(exit_status);
 }
 

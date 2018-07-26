@@ -1,12 +1,13 @@
-/**
- * \file server/tcp_server.c
+/*
+ *****************************************************************************
  *
- * \brief Spawns off a dummy tcp server for fwknopd.  Its purpose is
+ * File:    tcp_server.c
+ *
+ * Purpose: Spawns off a dummy tcp server for fwknopd.  Its purpose is
  *          to accept a tcp connection, then drop it after the first packet.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -57,14 +58,22 @@ run_tcp_server(fko_srv_options_t *opts)
     pid_t               pid, ppid;
 #endif
     int                 s_sock, c_sock, sfd_flags, clen, selval;
-    int                 reuse_addr = 1, rv=1;
+    int                 reuse_addr = 1, is_err, rv=1;
     fd_set              sfd_set;
     struct sockaddr_in  saddr, caddr;
     struct timeval      tv;
     char                sipbuf[MAX_IPV4_STR_LEN] = {0};
 
-    log_msg(LOG_INFO, "Kicking off TCP server to listen on port %i.",
-            opts->tcpserv_port);
+    unsigned short      port;
+
+    port = strtol_wrapper(opts->config[CONF_TCPSERV_PORT],
+            1, MAX_PORT, NO_EXIT_UPON_ERR, &is_err);
+    if(is_err != FKO_SUCCESS)
+    {
+        log_msg(LOG_ERR, "[*] Invalid max TCPSERV_PORT value.");
+        return -1;
+    }
+    log_msg(LOG_INFO, "Kicking off TCP server to listen on port %i.", port);
 
 #if !CODE_COVERAGE
     /* Fork off a child process to run the command and provide its outputs.
@@ -138,7 +147,7 @@ run_tcp_server(fko_srv_options_t *opts)
     memset(&saddr, 0, sizeof(saddr));
     saddr.sin_family      = AF_INET;           /* Internet address family */
     saddr.sin_addr.s_addr = htonl(INADDR_ANY); /* Any incoming interface */
-    saddr.sin_port        = htons(opts->tcpserv_port);  /* Local port */
+    saddr.sin_port        = htons(port);       /* Local port */
 
     /* Bind to the local address */
     if (bind(s_sock, (struct sockaddr *) &saddr, sizeof(saddr)) < 0)
@@ -146,11 +155,6 @@ run_tcp_server(fko_srv_options_t *opts)
         log_msg(LOG_ERR, "run_tcp_server: bind() failed: %s",
             strerror(errno));
         close(s_sock);
-
-    /* In the case of code coverage, don't die on bind() fail, as netcat may be running  */
-#if CODE_COVERAGE
-        return 0;
-#endif
         return -1;
     }
 

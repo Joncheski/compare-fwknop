@@ -1,11 +1,12 @@
-/**
- * \file client/spa_comm.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for fwknop client test program.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    spa_comm.h
+ *
+ * Purpose: Header file for fwknop client test program.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):

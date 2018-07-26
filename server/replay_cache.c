@@ -1,17 +1,16 @@
-/**
- * \file server/replay_cache.c
+/*
+ *****************************************************************************
  *
- * \brief Cache packets for replay attack detection
+ * File:    replay_cache.c
  *
- *          Provides the functions to check for possible replay attacks
+ * Purpose: Provides the functions to check for possible replay attacks
  *          by using a cache of previously seen digests.  This cache is a
  *          simple file by default, but can be made to use a dbm solution
  *          (ndbm or gdbm in ndbm compatibility mode) file to store the digest
  *          of a previously received SPA packets.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -272,8 +271,8 @@ replay_file_cache_init(fko_srv_options_t *opts)
     */
     if ((digest_file_ptr = fopen(opts->config[CONF_DIGEST_FILE], "r")) == NULL)
     {
-        log_msg(LOG_WARNING, "Could not open digest cache: %s: %s",
-            opts->config[CONF_DIGEST_FILE], strerror(errno));
+        log_msg(LOG_WARNING, "Could not open digest cache: %s",
+            opts->config[CONF_DIGEST_FILE]);
         return(-1);
     }
 
@@ -494,8 +493,8 @@ add_replay_file_cache(fko_srv_options_t *opts, char *digest)
     */
     if ((digest_file_ptr = fopen(opts->config[CONF_DIGEST_FILE], "a")) == NULL)
     {
-        log_msg(LOG_WARNING, "Could not open digest cache: %s: %s",
-            opts->config[CONF_DIGEST_FILE], strerror(errno));
+        log_msg(LOG_WARNING, "Could not open digest cache: %s",
+            opts->config[CONF_DIGEST_FILE]);
         return(SPA_MSG_DIGEST_CACHE_ERROR);
     }
 

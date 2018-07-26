@@ -11,7 +11,7 @@ AC_PREREQ(2.62)
 
 dnl Define our name, version and email.
 m4_define(my_package,   [fwknop])
-m4_define(my_version,   [2.6.9])
+m4_define(my_version,   [2.6.7])
 m4_define(my_bug_email, [dstuart@dstuart.org])
 
 AC_INIT(my_package, my_version, my_bug_email)
@@ -157,8 +157,6 @@ if test "x$want_libfiu_support" = "xyes"; then
     FKO_CHECK_COMPILER_ARG_LDFLAGS_ONLY([-lfiu])
 fi
 
-AM_CONDITIONAL([WANT_LIBFIU_SUPPORT], [test "$want_libfiu_support" = yes])
-
 dnl Decide whether or not to enable C unit testing
 dnl
 want_c_unit_tests=no
@@ -253,16 +251,6 @@ AC_ARG_ENABLE([udp-server],
   [want_udp_server=$enableval],
   [])
 AM_CONDITIONAL([UDP_SERVER], [test "$want_udp_server" = yes])
-
-dnl Decide whether or not to enable UDP server mode (no libpcap dependency)
-dnl
-want_nfq_capture=no
-AC_ARG_ENABLE([nfq-capture],
-  [AS_HELP_STRING([--enable-nfq-capture],
-    [Enable NF_QUEUE server mode for no libpcap dependency @<:@default is to disable@:>@])],
-  [want_nfq_capture=$enableval],
-  [])
-AM_CONDITIONAL([NFQ_CAPTURE], [test "$want_nfq_capture" = yes])
 
 dnl Decide whether or not to enable all warnings with -Wall
 dnl
@@ -387,7 +375,7 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_FUNC_STAT
 
-AC_CHECK_FUNCS([bzero gettimeofday memmove memset socket strchr strcspn strdup strncasecmp strndup strrchr strspn strnlen stat lstat chmod chown strlcat strlcpy])
+AC_CHECK_FUNCS([bzero gettimeofday memmove memset socket strchr strcspn strdup strncasecmp strndup strrchr strspn strnlen stat chmod chown strlcat strlcpy])
 
 dnl Decide whether or not to check for the execvpe() function
 dnl
@@ -405,26 +393,13 @@ fi
 AC_SEARCH_LIBS([socket], [socket])
 AC_SEARCH_LIBS([inet_addr], [nsl])
 
-AM_CONDITIONAL(MINGW, false)
-
-use_mingw=no
-
 case "$host" in
 *-*-linux*)
-    ;;
-*-*-netbsd*)
-    AC_DEFINE_UNQUOTED([PLATFORM_NETBSD], [1], [Define if you are running on NetBSD])
     ;;
 *-*-openbsd*)
     AC_DEFINE_UNQUOTED([PLATFORM_OPENBSD], [1], [Define if you are running on OpenBSD])
     ;;
-*-mingw32*)
-    AC_DEFINE_UNQUOTED(MINGW,1,[This is a MinGW system])
-    use_mingw=yes
-    ;;
 esac
-
-AM_CONDITIONAL(USE_MINGW, [test x$use_mingw = xyes])
 
 dnl Decide whether or not to build the client
 dnl
@@ -551,25 +526,48 @@ AS_IF([test "x$WGET_EXE" != x],
   ], [ wget_exe="(not found)"]
 )
 
+dnl Check for ssl
+dnl
+AC_CHECK_HEADER(openssl/ssl.h, , [ AC_MSG_ERROR( [did not find openssl/ssl.h] ) ] )
+AC_SEARCH_LIBS([SSL_library_init], [ssl],
+  ,
+  [ AC_MSG_ERROR([libfko needs ssl])]
+)
+
+dnl Check for crypto
+dnl
+AC_SEARCH_LIBS([X509_get_subject_name], [crypto],
+  ,
+  [ AC_MSG_ERROR([libfko needs crypto])]
+)
+
+dnl Check for json
+dnl
+AC_CHECK_HEADER(json-c/json.h, , [ AC_MSG_ERROR( [did not find json-c/json.h] ) ] )
+AC_SEARCH_LIBS([json_tokener_parse], [json0, json-c],
+  ,
+  [ AC_MSG_ERROR([libfko and fwknopd need json-c (libjson0 and libjson0-dev on linux)])]
+)
+
+dnl THIS NEEDS FIXING TO HANDLE WINDOWS
+dnl Check for pthread
+dnl
+AC_SEARCH_LIBS([pthread_create], [pthread], 
+  ,
+  [ AC_MSG_ERROR([libfko and fwknopd need pthread]) ]
+)
+  
+
 dnl Check for libpcap, gdbm (or ndbm) if we are building the server component
 dnl
 AS_IF([test "$want_server" = yes], [
 
-  AS_IF([test "$want_udp_server" = no -a "$want_nfq_capture" = no], [
+  AS_IF([test "$want_udp_server" = no], [
     # Looking for libpcap
     #
     AC_CHECK_LIB([pcap],[pcap_open_live],
       [ AC_DEFINE([USE_LIBPCAP], [1], [Define if you have libpcap]) ],
       [ AC_MSG_ERROR([fwknopd needs libpcap])]
-    )
-  ])
-
-  AS_IF([test "$want_nfq_capture" = yes], [
-    # Check for libnetfilter_queue
-    #
-    AC_CHECK_LIB([netfilter_queue],[nfq_open],
-      [ AC_DEFINE([USE_LIBNETFILTER_QUEUE], [1], [Define if you have libnetfilter_queue]) ],
-      [ AC_MSG_ERROR([fwknopd needs libnetfilter_queue])]
     )
   ])
 
@@ -832,10 +830,6 @@ if [test "$want_server" = "yes" ]; then
 "
 if [test "$want_udp_server" = "yes" ]; then
   echo "    UDP server mode enabled, no libpcap dependency
-"
-    fi
-if [test "$want_nfq_capture" = "yes" ]; then
-  echo "    Netfilter Queue server mode enabled, no libpcap dependency
 "
     fi
 

@@ -1,12 +1,11 @@
-/**
- * \file server/cmd_cycle.c
+/*
+ * @file    cmd_cycle.c
  *
- * \brief Fwknop routines for managing command cycles as defined via
+ * @brief   Fwknop routines for managing command cycles as defined via
  *          access.conf stanzas (CMD_CYCLE_OPEN and CMD_CYCLE_CLOSE).
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -68,10 +67,6 @@ build_cmd(spa_data_t *spadat, const char * const cmd_cycle_str, int timer)
     char             client_timeout_str[10] = {0};
     acc_port_list_t *port_list = NULL;
     int              i=0, buf_idx=0;
-
-#if HAVE_LIBFIU
-    fiu_return_on("cmd_cycle_build_err", 0);
-#endif
 
     if(expand_acc_port_list(&port_list, spadat->spa_message_remain) != 1)
     {
@@ -306,7 +301,7 @@ cmd_cycle_open(fko_srv_options_t *opts, acc_stanza_t *acc,
         if(! add_cmd_close(opts, acc, spadat, stanza_num))
             return 0;
 
-     return 1;
+     return FKO_SUCCESS;
 }
 
 static void

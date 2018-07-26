@@ -1,11 +1,13 @@
-/**
- * \file lib/fko_message.c
+/*
+ *****************************************************************************
  *
- * \brief Set/Get the spa message (access req/command/etc) based on the current spa data.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_message.c
+ *
+ * Purpose: Set/Get the spa message (access req/command/etc) based
+ *          on the current spa data.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -50,7 +52,7 @@ have_allow_ip(const char *msg)
         }
         if(*ndx == '.')
             dot_ctr++;
-        else if(isdigit((int)(unsigned char)*ndx) == 0)
+        else if(isdigit(*ndx) == 0)
         {
             res = FKO_ERROR_INVALID_ALLOW_IP;
             break;
@@ -64,10 +66,44 @@ have_allow_ip(const char *msg)
         res = FKO_ERROR_INVALID_ALLOW_IP;
 
     if(res == FKO_SUCCESS)
-        if (! is_valid_ipv4_addr(ip_str, strlen(ip_str)))
+        if (! is_valid_ipv4_addr(ip_str))
             res = FKO_ERROR_INVALID_ALLOW_IP;
 
     return(res);
+}
+
+static int
+have_service_id(const char *msg)
+{
+    const char  *ndx = msg;
+    char        service_id_str[MAX_SERVICE_ID_STR_LEN+1] = {0};
+    int         startlen = strnlen(msg, MAX_SPA_MESSAGE_SIZE);
+    int         service_id_str_len=0, i=0, is_err;
+
+    if(startlen == MAX_SPA_MESSAGE_SIZE)
+        return(FKO_ERROR_INVALID_DATA_MESSAGE_PORT_MISSING);
+
+    /* Must have at least one digit for the service id
+    */
+    if(isdigit(*ndx) == 0)
+        return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
+
+    while(*ndx != '\0' && *ndx != ',')
+    {
+    	service_id_str_len++;
+        if((isdigit(*ndx) == 0) || (service_id_str_len > MAX_SERVICE_ID_STR_LEN))
+            return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
+        service_id_str[i] = *ndx;
+        ndx++;
+        i++;
+    }
+    service_id_str[i] = '\0';
+
+    strtoul_wrapper(service_id_str, 1, UINT32_MAX, NO_EXIT_UPON_ERR, &is_err);
+    if(is_err != FKO_SUCCESS)
+        return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
+
+    return FKO_SUCCESS;
 }
 
 static int
@@ -83,13 +119,13 @@ have_port(const char *msg)
 
     /* Must have at least one digit for the port number
     */
-    if(isdigit((int)(unsigned char)*ndx) == 0)
+    if(isdigit(*ndx) == 0)
         return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
 
     while(*ndx != '\0' && *ndx != ',')
     {
         port_str_len++;
-        if((isdigit((int)(unsigned char)*ndx) == 0) || (port_str_len > MAX_PORT_STR_LEN))
+        if((isdigit(*ndx) == 0) || (port_str_len > MAX_PORT_STR_LEN))
             return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
         port_str[i] = *ndx;
         ndx++;
@@ -187,13 +223,16 @@ fko_set_spa_message(fko_ctx_t ctx, const char * const msg)
     */
     if(ctx->message_type == FKO_COMMAND_MSG)
         res = validate_cmd_msg(msg);
+    else if(ctx->message_type == FKO_SERVICE_ACCESS_MSG ||
+    		ctx->message_type == FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG)
+    	res = validate_service_access_msg(msg);
     else
         res = validate_access_msg(msg);
 
     if(res != FKO_SUCCESS)
         return(res);
 
-    /* Just in case this is a subsequent call to this function.  We
+    /* Just in case this is a subsquent call to this function.  We
      * do not want to be leaking memory.
     */
     if(ctx->message != NULL)
@@ -264,6 +303,40 @@ validate_cmd_msg(const char *msg)
     return(FKO_SUCCESS);
 }
 
+
+int
+validate_service_access_msg(const char *msg)
+{
+    const char   *ndx;
+    int     res         = FKO_SUCCESS;
+    int     startlen    = strnlen(msg, MAX_SPA_MESSAGE_SIZE);
+
+    if(startlen == MAX_SPA_MESSAGE_SIZE)
+        return(FKO_ERROR_INVALID_DATA_MESSAGE_ACCESS_MISSING);
+
+    /* Should always have a valid allow IP regardless of message type
+    */
+    if((res = have_allow_ip(msg)) != FKO_SUCCESS)
+        return(res);
+
+    /* Position ourselves beyond the allow IP and make sure we are
+     * still good.
+    */
+    ndx = strchr(msg, ',');
+    if(ndx == NULL || (1+(ndx - msg)) >= startlen)
+        return(FKO_ERROR_INVALID_SPA_ACCESS_MSG);
+
+    do {
+        ndx++;
+        res = have_service_id(ndx);
+        if(res != FKO_SUCCESS)
+            break;
+    } while((ndx = strchr(ndx, ',')));
+
+    return(res);
+}
+
+
 int
 validate_access_msg(const char *msg)
 {
@@ -302,27 +375,15 @@ int
 validate_nat_access_msg(const char *msg)
 {
     const char   *ndx;
-    int     host_len;
     int     res         = FKO_SUCCESS;
     int     startlen    = strnlen(msg, MAX_SPA_MESSAGE_SIZE);
 
     if(startlen == MAX_SPA_MESSAGE_SIZE)
         return(FKO_ERROR_INVALID_DATA_MESSAGE_NAT_MISSING);
 
-    /* must have exactly one comma here
+    /* Should always have a valid allow IP regardless of message type
     */
-    if(count_characters(msg, ',', startlen) != 1)
-        return(FKO_ERROR_INVALID_SPA_NAT_ACCESS_MSG);
-
-    /* Must not be longer than the max hostname length
-    */
-    host_len = strcspn(msg, ",");
-    if(host_len > MAX_HOSTNAME_LEN)
-        return(FKO_ERROR_INVALID_SPA_NAT_ACCESS_MSG);
-
-    /* Check for some invalid characters
-    */
-    if(strcspn(msg, " /?\"\'\\") < host_len)
+    if((res = have_allow_ip(msg)) != FKO_SUCCESS)
         return(FKO_ERROR_INVALID_SPA_NAT_ACCESS_MSG);
 
     /* Position ourselves beyond the allow IP and make sure we have

@@ -1,11 +1,12 @@
-/**
- * \file server/fwknopd.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for fwknopd server program.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fwknopd.h
+ *
+ * Purpose: Header file for fwknopd server program.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -43,43 +44,18 @@
  * of defining them here.
 */
 #ifndef LOCK_SH
-  /**
-   * \def LOCK_SH
-   *
-   * \brief Shared file lock
-   */
-  #define   LOCK_SH        0x01
+  #define   LOCK_SH        0x01      /* shared file lock */
 #endif
 #ifndef LOCK_EX
-  /**
-   * \def LOCK_EX
-   *
-   * \brief Exclusive file lock
-   */
-  #define   LOCK_EX        0x02
+  #define   LOCK_EX        0x02      /* exclusive file lock */
 #endif
 #ifndef LOCK_NB
-  /**
-   * \def LOCK_NB
-   *
-   * \brief Do not block when locking
-   */
-  #define   LOCK_NB        0x04
+  #define   LOCK_NB        0x04      /* do not block when locking */
 #endif
 #ifndef LOCK_UN
-  /**
-   * \def LOCK_UN
-   *
-   * \brief Unlock file
-   */
-  #define   LOCK_UN        0x08
+  #define   LOCK_UN        0x08      /* unlock file */
 #endif
 
-  /**
-   * \def PID_BUFLEN
-   *
-   * \brief Buffer length for PID
-   */
 #define PID_BUFLEN 7
 
 #endif  /* FWKNOPD_H */

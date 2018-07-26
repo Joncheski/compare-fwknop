@@ -1,11 +1,12 @@
-/**
- * \file server/fw_util_ipfw.c
+/*
+ *****************************************************************************
  *
- * \brief Fwknop routines for managing ipfw firewall rules.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fw_util_ipfw.c
+ *
+ * Purpose: Fwknop routines for managing ipfw firewall rules.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -513,7 +514,7 @@ process_spa_request(const fko_srv_options_t * const opts,
         */
         rule_num = get_next_rule_num();
 
-        /* If rule_num comes back as 0, we already have the maximum number
+        /* If rule_num comes back as 0, we aready have the maximum number
          * of active rules allowed so we reject and bail here.
         */
         if(rule_num == 0)

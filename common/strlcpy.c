@@ -1,10 +1,11 @@
-/**
- * \file common/strlcpy.c
+/*
+ *****************************************************************************
  *
- * \brief Safer string copy routine.
- */
-
-/* Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
+ * File:    strlcpy.c
+ *
+ * Purpose: Safer string copy routine.
+ *
+ * Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

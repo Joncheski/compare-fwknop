@@ -1,11 +1,12 @@
-/**
- * \file server/sig_handler.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for sig_handler functions and data.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    sig_handler.h
+ *
+ * Purpose: Header file for sig_handler functions and data.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -43,7 +44,7 @@ extern sig_atomic_t got_sigchld;
 
 void sig_handler(int sig);
 int set_sig_handlers(void);
-int sig_do_stop(void);
+int sig_do_stop(fko_srv_options_t * const opts);
 
 #endif /* SIG_HANDLER_H */
 

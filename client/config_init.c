@@ -1,11 +1,12 @@
 /**
- * \file    client/config_init.c
+ ******************************************************************************
+ *
+ * \file    config_init.c
  *
  * \brief   Command-line and config file processing for fwknop client.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -35,6 +36,7 @@
 #include "utils.h"
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <inttypes.h>
 
 #ifdef WIN32
   #define STDIN_FILENO 0
@@ -51,10 +53,10 @@
 #define BITMASK_ARRAY_SIZE          2                                   /*!< Number of 32bits integer used to handle bitmask in the fko_var_bitmask_t structure */
 #define LF_CHAR                     0x0A                                /*!< Hexadecimal value associated to the LF char */
 
-#ifdef HAVE_C_UNIT_TESTS /* LCOV_EXCL_START */
+#ifdef HAVE_C_UNIT_TESTS
   #include "cunit_common.h"
   DECLARE_TEST_SUITE(config_init, "Config init test suite");
-#endif /* LCOV_EXCL_STOP */
+#endif
 
 /**
  * Structure to handle long bitmask.
@@ -133,6 +135,11 @@ enum
     FWKNOP_CLI_ARG_RESOLVE_HTTP_ONLY,
     FWKNOP_CLI_ARG_WGET_CMD,
     FWKNOP_CLI_ARG_NO_SAVE_ARGS,
+    FWKNOP_CLI_ARG_DISABLE_SDP_MODE,
+    FWKNOP_CLI_ARG_SDP_ID,
+    FWKNOP_CLI_ARG_SERVICE_IDS,
+    FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT,
+    FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF,
     FWKNOP_CLI_LAST_ARG
 } fwknop_cli_arg_t;
 
@@ -181,7 +188,13 @@ static fko_var_t fko_var_array[FWKNOP_CLI_LAST_ARG] =
     { "RESOLVE_IP_HTTPS",      FWKNOP_CLI_ARG_RESOLVE_IP_HTTPS      },
     { "RESOLVE_HTTP_ONLY",     FWKNOP_CLI_ARG_RESOLVE_HTTP_ONLY     },
     { "WGET_CMD",              FWKNOP_CLI_ARG_WGET_CMD              },
-    { "NO_SAVE_ARGS",          FWKNOP_CLI_ARG_NO_SAVE_ARGS          }
+    { "NO_SAVE_ARGS",          FWKNOP_CLI_ARG_NO_SAVE_ARGS          },
+    { "DISABLE_SDP_MODE",      FWKNOP_CLI_ARG_DISABLE_SDP_MODE      },
+    { "SDP_ID",            FWKNOP_CLI_ARG_SDP_ID         },
+    { "SERVICE_IDS",            FWKNOP_CLI_ARG_SERVICE_IDS           },
+    { "DISABLE_CTRL_CLIENT",   FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT},
+    { "SDP_CTRL_CLIENT_CONF",  FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF  }
+
 };
 
 /* Array to define which conf. variables are critical and should not be
@@ -514,7 +527,7 @@ is_rc_section(const char* line, uint16_t line_size, char* rc_section, uint16_t r
 
         ndx = buf;
 
-        while(isspace((int)(unsigned char)*ndx))
+        while(isspace(*ndx))
             ndx++;
 
         if(*ndx == '[')
@@ -584,12 +597,12 @@ is_rc_param(const char *line, rc_file_param_t *param)
 }
 
 /**
- * \brief Dump available stanzas from an fwknoprc file
+ * @brief Dump available stanzas from a fwknoprc file
  *
  * This function parses a rcfile and looks for configured stanzas.
  * They are all displayed except the default stanza.
- *
- * \param rcfile full path to the rcfile to parse
+ * 
+ * @param rcfile full path to the rcfile to parse
  */
 static int
 dump_configured_stanzas_from_rcfile(const char* rcfile)
@@ -649,12 +662,6 @@ set_rc_file(char *rcfile, fko_cli_options_t *options)
 
     if(options->rc_file[0] == 0x0)
     {
-        if(options->no_home_dir)
-        {
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "Warning: in --no-home-dir mode, must set --rc-file path.");
-            exit(EXIT_FAILURE);
-        }
 #ifdef WIN32
         homedir = getenv("USERPROFILE");
 #else
@@ -673,7 +680,7 @@ set_rc_file(char *rcfile, fko_cli_options_t *options)
         rcf_offset = strlen(rcfile);
 
         /* Sanity check the path to .fwknoprc.
-         * The preceding path plus the path separator and '.fwknoprc' = 11
+         * The preceeding path plus the path separator and '.fwknoprc' = 11
          * cannot exceed MAX_PATH_LEN.
          */
         if(rcf_offset > (MAX_PATH_LEN - 11))
@@ -685,6 +692,9 @@ set_rc_file(char *rcfile, fko_cli_options_t *options)
 
         rcfile[rcf_offset] = PATH_SEP;
         strlcat(rcfile, ".fwknoprc", MAX_PATH_LEN);
+
+        // since the field is not set in options, copy it for later use
+        strlcpy(options->rc_file, rcfile, MAX_PATH_LEN);
     }
     else
     {
@@ -761,7 +771,7 @@ parse_time_offset(const char *offset_str, int *offset)
 
     j=0;
     for (i=0; i < os_len; i++) {
-        if (isdigit((int)(unsigned char)offset_str[i])) {
+        if (isdigit(offset_str[i])) {
             offset_digits[j] = offset_str[i];
             j++;
             if(j >= MAX_TIME_STR_LEN)
@@ -807,7 +817,7 @@ create_fwknoprc(const char *rcfile)
      * If the rcfile already exists, an error is returned */
     rcfile_fd = open(rcfile, FWKNOPRC_OFLAGS ,FWKNOPRC_MODE);
 
-    // If an error occurred ...
+    // If an error occured ...
     if (rcfile_fd == -1) {
             log_msg(LOG_VERBOSITY_WARNING, "Unable to create initial rc file: %s: %s",
                 rcfile, strerror(errno));
@@ -881,16 +891,27 @@ create_fwknoprc(const char *rcfile)
         "# User-provided named stanzas:\n"
         "\n"
         "# Example for a destination server of 192.168.1.20 to open access to\n"
-        "# SSH for an IP that is resolved externally, and one with a NAT request\n"
-        "# for a specific source IP that maps port 8088 on the server\n"
-        "# to port 88 on 192.168.1.55 with timeout.\n"
+        "# SSH (service ID 123) for an IP that is resolved externally, a second\n"
+        "# example for a NAT request with timeout (service ID 456, client is\n"
+        "# actually unaware that NAT is involved), and one legacy NAT request\n"
+        "# for a specific source IP that maps port 8088 on the server to port\n"
+        "# 88 on 192.168.1.55 with timeout.\n"
         "#\n"
         "#[myssh]\n"
+        "#SDP_ID       12345\n"
         "#SPA_SERVER          192.168.1.20\n"
-        "#ACCESS              tcp/22\n"
+        "#SERVICE_IDS         123\n"
         "#ALLOW_IP            resolve\n"
         "#\n"
         "#[mynatreq]\n"
+        "#SDP_ID       12345\n"
+        "#SPA_SERVER          192.168.1.20\n"
+        "#SERVICE_IDS         456\n"
+        "#ALLOW_IP            10.21.2.6\n"
+        "#CLIENT_TIMEOUT      60\n"
+        "#\n"
+        "#[mynatreq_legacy]\n"
+        "#SDP_ID       12345\n"
         "#SPA_SERVER          192.168.1.20\n"
         "#ACCESS              tcp/8088\n"
         "#ALLOW_IP            10.21.2.6\n"
@@ -982,7 +1003,7 @@ parse_rc_param(fko_cli_options_t *options, const char *var_name, char * val)
         else /* Assume IP address and validate */
         {
             strlcpy(options->allow_ip_str, val, sizeof(options->allow_ip_str));
-            if(! is_valid_ipv4_addr(options->allow_ip_str, strlen(options->allow_ip_str)))
+            if(! is_valid_ipv4_addr(options->allow_ip_str))
                 parse_error = -1;
         }
     }
@@ -1125,7 +1146,7 @@ parse_rc_param(fko_cli_options_t *options, const char *var_name, char * val)
         if(tmpint < 0)
         {
             log_msg(LOG_VERBOSITY_WARNING,
-                    "HMAC_DIGEST_TYPE argument '%s' must be one of {md5,sha1,sha256,sha384,sha512,sha3_256,sha3_512}",
+                    "HMAC_DIGEST_TYPE argument '%s' must be one of {md5,sha1,sha256,sha384,sha512}",
                     val);
             parse_error = -1;
         }
@@ -1297,6 +1318,45 @@ parse_rc_param(fko_cli_options_t *options, const char *var_name, char * val)
             options->no_save_args = 1;
         else;
     }
+    /* SDP mode - yes or no.
+    */
+    else if (var->pos == FWKNOP_CLI_ARG_DISABLE_SDP_MODE)
+    {
+        if (is_yes_str(val))
+            options->disable_sdp_mode = 1;
+        else
+            options->disable_sdp_mode = 0;
+    }
+    /* SDP Client ID */
+    else if (var->pos == FWKNOP_CLI_ARG_SDP_ID)
+    {
+        tmpint = strtol_wrapper(val, 0, UINT32_MAX, NO_EXIT_UPON_ERR, &is_err);;
+        if(is_err == FKO_SUCCESS)
+            options->sdp_id = (uint32_t)tmpint;
+        else
+            parse_error = -1;
+    }
+    /* Service ID */
+    else if (var->pos == FWKNOP_CLI_ARG_SERVICE_IDS)
+    {
+        strlcpy(options->service_ids_str,
+                val, sizeof(options->service_ids_str));
+    }
+    /* SDP Ctrl Client Config File */
+    else if (var->pos == FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF)
+    {
+        strlcpy(options->sdp_ctrl_client_config_file,
+                val, sizeof(options->sdp_ctrl_client_config_file));
+    }
+    /* Disable SDP Ctrl Client */
+    else if (var->pos == FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT)
+    {
+        if (is_yes_str(val))
+            options->disable_sdp_ctrl_client = 1;
+        else
+            options->disable_sdp_ctrl_client = 0;
+    }
+
     /* The variable is not a configuration variable */
     else
     {
@@ -1468,6 +1528,18 @@ add_single_var_to_rc(FILE* fhandle, short var_pos, fko_cli_options_t *options)
         case FWKNOP_CLI_ARG_NO_SAVE_ARGS :
             bool_to_yesno(options->no_save_args, val, sizeof(val));
             break;
+        case FWKNOP_CLI_ARG_DISABLE_SDP_MODE:
+            bool_to_yesno( (int)(options->disable_sdp_mode), val, sizeof(val));
+            break;
+        case FWKNOP_CLI_ARG_SDP_ID:
+            snprintf(val, sizeof(val)-1, "%"PRIu32, options->sdp_id);
+            break;
+        case FWKNOP_CLI_ARG_SERVICE_IDS:
+            strlcpy(val, options->service_ids_str, sizeof(val));
+            break;
+        case FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF:
+            strlcpy(val, options->sdp_ctrl_client_config_file, sizeof(val));
+            break;
         default:
             log_msg(LOG_VERBOSITY_WARNING,
                     "Warning from add_single_var_to_rc() : Bad variable position %u",
@@ -1510,14 +1582,14 @@ add_multiple_vars_to_rc(FILE* rc, fko_cli_options_t *options, fko_var_bitmask_t 
  * @brief Process the fwknoprc file and lookup a section to extract its settings.
  *
  * This function aims at loading the settings for a specific section in
- * an fwknoprc file.
+ * a fwknoprc file.
  *
  * @param section_name  Name of the section to lookup.
  * @param options       Fwknop option structure where settings have to
  *                      be stored.
  *
  * @return 0 if the section has been found and processed successfully
- *         a negative value if one or more errors occurred
+ *         a negative value if one or more errors occured
  */
 static int
 process_rc_section(char *section_name, fko_cli_options_t *options)
@@ -1677,7 +1749,11 @@ update_rc(fko_cli_options_t *options, fko_var_bitmask_t *bitmask)
          * first character.
         */
         if(IS_EMPTY_LINE(line[0]))
+        {
+            /* Add the line to the new rcfile */
+            fprintf(rc_update, "%s", line);
             continue;
+        }
 
         /* If we find a section... */
         if(is_rc_section(line, strlen(line), curr_stanza, sizeof(curr_stanza)) == 1)
@@ -1793,6 +1869,7 @@ update_rc(fko_cli_options_t *options, fko_var_bitmask_t *bitmask)
 static void
 validate_options(fko_cli_options_t *options)
 {
+
     if ( (options->use_rc_stanza[0] != 0x0)
         && (options->got_named_stanza == 0)
         && (options->save_rc_stanza == 0) )
@@ -1800,6 +1877,7 @@ validate_options(fko_cli_options_t *options)
         log_msg(LOG_VERBOSITY_ERROR,
                 "Named configuration stanza: [%s] was not found.",
                 options->use_rc_stanza);
+
         exit(EXIT_FAILURE);
     }
 
@@ -1851,6 +1929,18 @@ validate_options(fko_cli_options_t *options)
                     "[-] WARNING: Should use -a or -R to harden SPA against potential MITM attacks");
             }
         }
+
+        /* If SDP mode, must have defined sdp_id
+         */
+        if(!options->disable_sdp_mode)
+        {
+            if(options->sdp_id == FKO_DEFAULT_SDP_ID)
+            {
+                log_msg(LOG_VERBOSITY_ERROR,
+                    "SDP_ID must be specified when SDP mode is enabled");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
 
     /* Make sure -a overrides IP resolution
@@ -1860,7 +1950,7 @@ validate_options(fko_cli_options_t *options)
     {
         options->resolve_ip_http_https = 0;
 
-        if(! is_valid_ipv4_addr(options->allow_ip_str, strlen(options->allow_ip_str)))
+        if(! is_valid_ipv4_addr(options->allow_ip_str))
         {
             log_msg(LOG_VERBOSITY_ERROR,
                 "Invalid allow IP specified for SPA access");
@@ -1870,7 +1960,7 @@ validate_options(fko_cli_options_t *options)
 
     if (options->spoof_ip_src_str[0] != 0x00)
     {
-        if(! is_valid_ipv4_addr(options->spoof_ip_src_str, strlen(options->spoof_ip_src_str)))
+        if(! is_valid_ipv4_addr(options->spoof_ip_src_str))
         {
             log_msg(LOG_VERBOSITY_ERROR, "Invalid spoof IP");
             exit(EXIT_FAILURE);
@@ -1955,6 +2045,9 @@ set_defaults(fko_cli_options_t *options)
 
     options->input_fd       = FD_INVALID;
 
+    options->disable_sdp_mode = FKO_DEFAULT_DISABLE_SDP_MODE;
+    options->sdp_id    = FKO_DEFAULT_SDP_ID;
+
     return;
 }
 
@@ -1992,12 +2085,6 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
             case 'n':
                 strlcpy(options->use_rc_stanza, optarg, sizeof(options->use_rc_stanza));
                 break;
-            case NO_HOME_DIR:
-                options->no_home_dir = 1;
-                break;
-            case NO_RC_FILE:
-                options->no_rc_file = 1;
-                break;
             case SAVE_RC_STANZA:
                 options->save_rc_stanza = 1;
                 break;
@@ -2020,44 +2107,20 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
     /* Update the verbosity level for the log module */
     log_set_verbosity(LOG_DEFAULT_VERBOSITY + options->verbose);
 
-    if(options->no_rc_file)
+    /* Dump the configured stanzas from an rcfile */
+    if (options->stanza_list == 1)
     {
-        if(options->save_rc_stanza)
-        {
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "Cannot save an rc stanza in --no-rc-file mode.");
-            exit(EXIT_FAILURE);
-        }
-        if (options->use_rc_stanza[0] != 0x0)
-        {
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "Cannot set stanza name in --no-rc-file mode.");
-            exit(EXIT_FAILURE);
-        }
-        if (options->stanza_list)
-        {
-            log_msg(LOG_VERBOSITY_ERROR,
-                    "Cannot list stanzas in --no-rc-file mode.");
-            exit(EXIT_FAILURE);
-        }
+        set_rc_file(rcfile, options);
+        exit(dump_configured_stanzas_from_rcfile(rcfile));
     }
-    else
-    {
-        /* Dump the configured stanzas from an rcfile */
-        if (options->stanza_list == 1)
-        {
-            set_rc_file(rcfile, options);
-            exit(dump_configured_stanzas_from_rcfile(rcfile));
-        }
 
-        /* First process the .fwknoprc file.
-        */
-        process_rc_section(RC_SECTION_DEFAULT, options);
+    /* First process the .fwknoprc file.
+    */
+    process_rc_section(RC_SECTION_DEFAULT, options);
 
-        /* Load the user specified stanza from .fwknoprc file */
-        if ( (options->got_named_stanza) && (options->save_rc_stanza == 0) )
-            process_rc_section(options->use_rc_stanza, options);
-    }
+    /* Load the user specified stanza from .fwknoprc file */
+    if ( (options->got_named_stanza) && (options->save_rc_stanza == 0) )
+        process_rc_section(options->use_rc_stanza, options);
 
     /* Reset the options index so we can run through them again.
     */
@@ -2087,6 +2150,12 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
             case 'D':
                 strlcpy(options->spa_server_str, optarg, sizeof(options->spa_server_str));
                 add_var_to_bitmask(FWKNOP_CLI_ARG_SPA_SERVER, &var_bitmask);
+                break;
+            case DISABLE_SDP_CTRL_CLIENT:
+                options->disable_sdp_ctrl_client = 1;
+                break;
+            case DISABLE_SDP_MODE:
+                options->disable_sdp_mode = 1;
                 break;
             case 'E':
                 strlcpy(options->args_save_file, optarg, sizeof(options->args_save_file));
@@ -2190,7 +2259,7 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
                 if((options->hmac_type = hmac_digest_strtoint(optarg)) < 0)
                 {
                     log_msg(LOG_VERBOSITY_ERROR,
-                        "* Invalid hmac digest type: %s, use {md5,sha1,sha256,sha384,sha512,sha3_256,sha3_512}",
+                        "* Invalid hmac digest type: %s, use {md5,sha1,sha256,sha384,sha512}",
                         optarg);
                     exit(EXIT_FAILURE);
                 }
@@ -2241,7 +2310,7 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
                 if((options->digest_type = digest_strtoint(optarg)) < 0)
                 {
                     log_msg(LOG_VERBOSITY_ERROR,
-                        "* Invalid digest type: %s, use {md5,sha1,sha256,sha384,sha512,sha3_256,sha3_512}",
+                        "* Invalid digest type: %s, use {md5,sha1,sha256,sha384,sha512}",
                     optarg);
                     exit(EXIT_FAILURE);
                 }
@@ -2317,6 +2386,15 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
                 strlcpy(options->resolve_url, optarg, rlen);
                 add_var_to_bitmask(FWKNOP_CLI_ARG_RESOLVE_URL, &var_bitmask);
                 break;
+            case SDP_ID:
+                options->sdp_id = (uint32_t)strtol_wrapper(optarg, 0,
+                        UINT32_MAX, EXIT_UPON_ERR, &is_err);
+                add_var_to_bitmask(FWKNOP_CLI_ARG_SDP_ID, &var_bitmask);
+                break;
+            case SERVICE_IDS:
+                strlcpy(options->service_ids_str, optarg, sizeof(options->service_ids_str));
+                add_var_to_bitmask(FWKNOP_CLI_ARG_SERVICE_IDS, &var_bitmask);
+                break;
             case SERVER_RESOLVE_IPV4:
                 options->spa_server_resolve_ipv4 = 1;
                 break;
@@ -2381,7 +2459,6 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
             case GPG_HOME_DIR:
                 options->use_gpg = 1;
                 strlcpy(options->gpg_home_dir, optarg, sizeof(options->gpg_home_dir));
-                chop_char(options->gpg_home_dir, PATH_SEP);
                 add_var_to_bitmask(FWKNOP_CLI_ARG_USE_GPG, &var_bitmask);
                 add_var_to_bitmask(FWKNOP_CLI_ARG_GPG_HOMEDIR, &var_bitmask);
                 break;
@@ -2415,14 +2492,6 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
                 options->nat_port = strtol_wrapper(optarg, 0,
                         MAX_PORT, EXIT_UPON_ERR, &is_err);
                 add_var_to_bitmask(FWKNOP_CLI_ARG_NAT_PORT, &var_bitmask);
-                break;
-            case NO_HOME_DIR:
-                /* We already handled this earlier, so we do nothing here
-                */
-                break;
-            case NO_RC_FILE:
-                /* We already handled this earlier, so we do nothing here
-                */
                 break;
             case TIME_OFFSET_PLUS:
                 if (! parse_time_offset(optarg, &options->time_offset_plus))
@@ -2514,10 +2583,19 @@ usage(void)
       "                             of the configuration parameters.\n"
       "                             If more arguments are set through the command\n"
       "                             line, the configuration is updated accordingly.\n"
+      "     --sdp-id                Specify this 32 bit unsigned integer to \n"
+      "                             indicate this client's SDP client ID.\n"
+      "     --disable-sdp           Turn off SDP mode to revert to the classic \n"
+      "                             SPA packet format. Even with SDP mode disabled \n"
+      "                             this client is not backwards compatible. \n"
+      "     --disable-ctrl-client   Do not connect to SDP Controller during this \n"
+      "                             run. This is effectively the same as not \n"
+      "                             setting SDP_CTRL_CLIENT_CONF in the stanza \n"
+      "                             possibly being used. \n"
       " -A, --access                Provide a list of ports/protocols to open\n"
       "                             on the server (e.g. 'tcp/22').\n"
       " -a, --allow-ip              Specify IP address to allow within the SPA\n"
-      "                             packet (e.g. '123.2.3.4').\n"
+      "                             packet (e.g. '123.2.3.4').  If \n"
       " -D, --destination           Specify the hostname or IP address of the\n"
       "                             fwknop server.\n"
       " --use-hmac                  Add an HMAC to the outbound SPA packet for\n"
@@ -2536,6 +2614,9 @@ usage(void)
       "                             icmp) for the outgoing SPA packet.\n"
       "                             Note: The 'tcpraw' and 'icmp' modes use raw\n"
       "                             sockets and thus require root access to use.\n"
+      "     --services              Tell the fwknopd server which services to open\n"
+      "                             access to by specifying service IDs rather\n"
+      "                             than specifying ports or NAT information\n"
       " -s, --source-ip             Tell the fwknopd server to accept whatever\n"
       "                             source IP the SPA packet has as the IP that\n"
       "                             needs access (not recommended, and the\n"
@@ -2572,12 +2653,12 @@ usage(void)
       "                             line args as the last time it was executed\n"
       "                             (args are read from the ~/.fwknop.run file).\n"
       " -G, --get-key               Load an encryption key/password from a file.\n"
-      "     --stdin                 Read the encryption key/password from stdin.\n"
+      "     --stdin                 Read the encryption key/password from stdin\n"
       "     --fd                    Specify the file descriptor to read the\n"
       "                             encryption key/password from.\n"
       " -k, --key-gen               Generate SPA Rijndael + HMAC keys.\n"
       " -K, --key-gen-file          Write generated Rijndael + HMAC keys to a\n"
-      "                             file.\n"
+      "                             file\n"
       "     --key-rijndael          Specify the Rijndael key. Since the password is\n"
       "                             visible to utilities (like 'ps' under Unix)\n"
       "                             this form should only be used where security is\n"
@@ -2614,39 +2695,33 @@ usage(void)
       "     --hmac-digest-type      Set the HMAC digest algorithm (default is\n"
       "                             sha256). Options are md5, sha1, sha256,\n"
       "                             sha384, or sha512.\n"
-      "     --icmp-type             Set the ICMP type (used with '-P icmp').\n"
-      "     --icmp-code             Set the ICMP code (used with '-P icmp').\n"
+      "     --icmp-type             Set the ICMP type (used with '-P icmp')\n"
+      "     --icmp-code             Set the ICMP code (used with '-P icmp')\n"
       "     --gpg-encryption        Use GPG encryption (default is Rijndael).\n"
       "     --gpg-recipient-key     Specify the recipient GPG key name or ID.\n"
       "     --gpg-signer-key        Specify the signer's GPG key name or ID.\n"
-      "     --gpg-no-signing-pw     Allow no signing password if none associated\n"
-      "                             with GPG key.\n"
       "     --gpg-home-dir          Specify the GPG home directory.\n"
       "     --gpg-agent             Use GPG agent if available.\n"
       "     --gpg-exe               Set path to GPG binary.\n"
       "     --no-save-args          Do not save fwknop command line args to the\n"
-      "                             $HOME/fwknop.run file.\n"
+      "                             $HOME/fwknop.run file\n"
       "     --rc-file               Specify path to the fwknop rc file (default\n"
-      "                             is $HOME/.fwknoprc).\n"
+      "                             is $HOME/.fwknoprc)\n"
       "     --server-resolve-ipv4   Force IPv4 address resolution from DNS for\n"
       "                             SPA server when using a hostname.\n"
       "     --save-rc-stanza        Save command line arguments to the\n"
       "                             $HOME/.fwknoprc stanza specified with the\n"
       "                             -n option.\n"
       "     --force-stanza          Used with --save-rc-stanza to overwrite all of\n"
-      "                             the variables for the specified stanza.\n"
+      "                             the variables for the specified stanza\n"
       "     --stanza-list           Dump a list of the stanzas found in\n"
-      "                             $HOME/.fwknoprc.\n"
+      "                             $HOME/.fwknoprc\n"
       "     --nat-local             Access a local service via a forwarded port\n"
       "                             on the fwknopd server system.\n"
       "     --nat-port              Specify the port to forward to access a\n"
       "                             service via NAT.\n"
       "     --nat-rand-port         Have the fwknop client assign a random port\n"
       "                             for NAT access.\n"
-      "     --no-home-dir           Do not allow the fwknop client to look for\n"
-      "                             the user home directory.\n"
-      "     --no-rc-file            Perform fwknop client operations without\n"
-      "                             referencing a ~/.fwknoprc file.\n"
       "     --show-last             Show the last fwknop command line arguments.\n"
       "     --time-offset-plus      Add time to outgoing SPA packet timestamp.\n"
       "     --time-offset-minus     Subtract time from outgoing SPA packet\n"
@@ -2656,7 +2731,7 @@ usage(void)
     return;
 }
 
-#ifdef HAVE_C_UNIT_TESTS /* LCOV_EXCL_START */
+#ifdef HAVE_C_UNIT_TESTS
 
 DECLARE_TEST_SUITE_INIT(config_init)
 {
@@ -2702,7 +2777,7 @@ DECLARE_UTEST(check_var_bitmask, "Check var_bitmask functions")
     CU_ASSERT(bitmask_has_var(FWKNOP_CLI_LAST_ARG+32, &var_bitmask) == 0);
 
     add_var_to_bitmask(FWKNOP_CLI_LAST_ARG+34, &var_bitmask);
-    CU_ASSERT(bitmask_has_var(FWKNOP_CLI_LAST_ARG+34, &var_bitmask) == 0);
+    CU_ASSERT(bitmask_has_var(FWKNOP_CLI_LAST_ARG+34, &var_bitmask) == 0);    
 }
 
 int register_ts_config_init(void)
@@ -2714,4 +2789,5 @@ int register_ts_config_init(void)
     return register_ts(&TEST_SUITE(config_init));
 }
 
-#endif /* HAVE_C_UNIT_TESTS */ /* LCOV_EXCL_STOP */
+#endif /* HAVE_C_UNIT_TESTS */
+

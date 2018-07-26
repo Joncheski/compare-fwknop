@@ -1,79 +1,15 @@
-fwknop-2.6.10 (11//2016):
-    - [server] Add MAX_FW_TIMEOUT to access.conf stanzas to allow a maximum
-      number of seconds for client-specified timeouts in SPA packets. This
-      fixes issue #226 which was spotted by Jeremiah Rothschild.
-    - [server] Bug fix in CMD_EXEC mode to make sure to call exit() upon any
-      error from execvpe(). Without this fix, additional fwknopd processes
-      would be started upon a user specifying a command without the necessary
-      permissions. This bug was reported by Stephen Isard.
-    - [build] Jérémie Courrèges-Anglas and Ingo Feinerer contributed a patch
-      to fix endian detection on OpenBSD systems based on information
-      contained here: https://www.opengroup.org/austin/docs/austin_514.txt
-
-fwknop-2.6.9 (06/08/2016):
-    - (Jonathan Bennett) Added support for the SHA3 "Keccak" algorithm
-      (specifically SHA3_256 and SHA3_512) for SPA HMAC and digest checking.
-      Enabling SHA3 from the fwknop client command line is done with the '-m'
-      option for the embedded SPA digest, or with the --hmac-digest-type
-      argument for the HMAC. On the server side, SHA3_256 or SHA3_512 can be
-      required for incoming SPA packet HMAC'c via the HMAC_DIGEST_TYPE
-      configuration variable in access.conf stanzas. The SHA3 implementation
-      is from, Keyak and Ketje Teams, namely, Guido Bertoni, Joan Daemen,
-      Michael Peeters, Gilles Van Assche and Ronny Van Keer - see:
-      http://keyak.noekeon.org/
-    - (Damien Stuart) Added support for libnetfilter_queue so that fwknopd can
-      acquire SPA packets via the NFQ target. This feature is enabled with a
-      new command line switch '--enable-nfq-capture' for the configure script,
-      and libpcap is not required in this mode. In support of capturing SPA
-      packets via the NFQ target, new configuration variables have been added
-      to the fwknopd.conf file: ENABLE_NFQ_CAPTURE, NFQ_INTERFACE, NFQ_PORT,
-      NFQ_TABLE, NFQ_CHAIN, NFQ_QUEUE_NUMBER, and NFQ_LOOP_SLEEP.
-    - (Vlad Glagolev) Added support for deriving the source IP from the
-      X-Forwarded-For HTTP header when SPA packets are sent over HTTP
-      connections.
-    - Bug fix in command open/close cycle feature to ensure that the first
-      successful match on a valid incoming SPA packet finishes all access.conf
-      stanza processing. That is, no other stanzas should be looked at after
-      the first match, and this is consistent with other SPA modes (such as
-      basic access requests). This bug was reported by Jonathan Bennett.
-    - (Jonathan Bennett) Various fixes and enhancements to the test suite to
-      extend code coverage to new code, ensure valgrind bytes lost detection
-      works for amount of memory less than 10 bytes, better timing strategy
-      for fwknop client/server interactions, and more.
-
-fwknop-2.6.8 (12/23/2015):
-    - [server] Added a major new feature that allows fwknopd to easily
-      integrate with third-party devices and software. This done through the
-      addition of a generic "command open" and "command close" capability, and
-      a set of variable substitutions are supported such as '$SRC', '$PORT',
-      and '$PROTO'. This feature is designed to allow the user to switch out
-      the default firewall - iptables, firewalld, ipfw, or PF - for something
-      complete different. For example, here is a write-up on using this feature
-      to integrate SPA operations with ipset:
-
-        https://cipherdyne.org/blog/2015/12/single-packet-authorization-and-third-party-devices.html
-
-    - [server] (Jonathan Bennett) Added new access.conf directives
-      '%include <file>' and '%include_folder <directory>'. This allows more
-      access stanzas to be defined in other locations in the filesystem, and
-      this can be adventageous in some scenarios by letting non-privledged
-      users define their own encryption and authentication keys for SPA
-      operations. This way, users do not need write access to the main
-      /etc/fwknop/access.conf file to change keys around or define new ones.
+fwknop-2.6.8 (11//2015):
+    - [server] open/close functionality...
     - [server] Bug fix to not send the TCP server a TERM signal even when it is
       not running when fwknopd receives a HUP signal.
-    - [libfko] Bug fix for a crash that could be triggered in
-      fko_set_username() when a username that is 64 chars or longer is
-      specified. This crash cannot be triggered in fwknopd even if an SPA
-      packet contains such a username however due to additional protections in
-      the SPA decoding routines. Further, this bug does not apply to the main
-      fwknop client either because the maximal username size is truncated down
-      below 64 bytes. Hence, this bug only applies to client-side software that
-      is directly using libfko calling the fko_set_username() function.
-    - [test suite] Code coverage is now at 90.7% counted by lines. The complete
-      coverage report for the 2.6.8 release is available here:
-
-        https://www.cipherdyne.org/fwknop/lcov-results/
+    - [libfko] Bug fix for a crash that could be triggered in fko_set_username()
+      when a username that is 64 chars or longer is specified. This crash
+      cannot be triggered in fwknopd even if an SPA packet contains such a
+      username however due to additional protections in the SPA decoding
+      routines. Further, this bug does not apply to the main fwknop client
+      either because the maximal username size is truncated down below 64
+      bytes. Hence, this bug only applies to client-side software that is
+      directly using libfko calling the fko_set_username() function.
 
 fwknop-2.6.7 (08/24/2015):
     - [server] When command execution is enabled with ENABLE_CMD_EXEC for an
@@ -117,7 +53,7 @@ fwknop-2.6.6 (04/23/2015):
       default from accessing the broader Internet until a valid SPA packet is
       sent to the gateway. Two new access.conf variables support this feature:
       DISABLE_DNAT (do not build any DNAT rules for forwarded connections) and
-      FORWARD_ALL (allow all traffic to be forwarded instead of specific
+      FORWARD_ALL (allow all traffic to be forwarded instead of specfic
       services requested within an SPA packet). So far, this feature is only
       supported on systems running iptables or firewalld. The idea was
       contributed by "spartan1833" to the fwknop mailing list, and this became
@@ -126,7 +62,7 @@ fwknop-2.6.6 (04/23/2015):
       pcap.h, which is likely not installed whenever libpcap is also not
       installed. This bug was reported by Alexander Kozhevnikov.
     - [android] (Dan Brooks) Contributed a patch for the Android client app to
-      add the definition of custom server udp port. This is similar to the
+      add the definition of custom server udp port. This is similiar to the
       --server-port argument offered by the main fwknop client.
     - [test suite] Handle versions of lcov that don't have the --rc argument
       which is normally used to force the creation of branch coverage stats
@@ -519,7 +455,7 @@ fwknop-2.5 (07/19/2013):
       far more powerful.
 
 fwknop-2.0.4 (12/09/2012):
-    - [client] Misc fixes and the addition of save_args and last command
+    - [client] Misc fixes and the addition of save_args and last command 
       (.fwknop.last) support on the Windows platform.
     - [client] Fixed bug in username determination code where a valid value
       could be overrwritten in certain circumstances.
@@ -636,7 +572,7 @@ fwknop-2.0.2 (08/18/2012):
       worse than storing the passphrase in the clear on disk anyway in the
       access.conf file.  Further, this link helps provide additional detail:
 
-      https://www.gnupg.org/faq/gnupg-faq.html#automated_use
+      http://www.gnupg.org/faq/GnuPG-FAQ.html#how-can-i-use-gnupg-in-an-automated-environment
 
     - [client] In IP resolution mode (-R) changed HTTP connection type to
       'close' since there is no need for connection persistence, and indeed the

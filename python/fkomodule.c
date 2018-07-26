@@ -6,25 +6,8 @@
  * Purpose: Python wrapper module for the fwknop library (libfko).
  *
  *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
- *
- *  License (GNU General Public License):
- *
- *  This program is free software; you can redistribute it and/or
- *  modify it under the terms of the GNU General Public License
- *  as published by the Free Software Foundation; either version 2
- *  of the License, or (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
- *  USA
  *
  *****************************************************************************
 */
@@ -330,14 +313,15 @@ init_ctx_with_data(PyObject *self, PyObject *args)
     char *hmac_key;
     int hmac_key_len;
     int hmac_type;
+    int sdp_id;
     int res;
 
     if(!PyArg_ParseTuple(args, "ss#is#", &spa_data, &dec_key, &dec_key_len,
-                         &enc_mode, &hmac_key, &hmac_key_len, &hmac_type))
+                         &enc_mode, &hmac_key, &hmac_key_len, &hmac_type, &sdp_id))
         return NULL;
 
     res = fko_new_with_data(&ctx, spa_data, dec_key, dec_key_len, enc_mode,
-                            hmac_key, hmac_key_len, hmac_type);
+                            hmac_key, hmac_key_len, hmac_type, (uint32_t)sdp_id);
 
     if(res != FKO_SUCCESS)
     {

@@ -2,7 +2,7 @@
 
 #
 # Fuzz the fwknop client fwknoprc file. This wrapper also has the ability to
-# kick off afl-cov to produce code coverage results at the same time. Note that
+# kick of afl-cov to produce code coverage results at the same time. Note that
 # CODE_DIR points to the fwknop project code compiled with gcov profiling
 # support.
 #

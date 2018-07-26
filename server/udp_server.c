@@ -1,11 +1,12 @@
-/**
- * \file server/udp_server.c
+/*
+ *****************************************************************************
  *
- * \brief Collect SPA packets via a UDP server.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    udp_server.c
+ *
+ * Purpose: Collect SPA packets via a UDP server.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -53,16 +54,39 @@ int
 run_udp_server(fko_srv_options_t *opts)
 {
     int                 s_sock, sfd_flags, selval, pkt_len;
-    int                 rv=1, chk_rm_all=0;
+    int                 is_err, s_timeout, rv=1, chk_rm_all=0;
+    int                 rules_chk_threshold;
     fd_set              sfd_set;
     struct sockaddr_in  saddr, caddr;
     struct timeval      tv;
     char                sipbuf[MAX_IPV4_STR_LEN] = {0};
     char                dgram_msg[MAX_SPA_PACKET_LEN+1] = {0};
+    unsigned short      port;
     socklen_t           clen;
 
-    log_msg(LOG_INFO, "Kicking off UDP server to listen on port %i.",
-            opts->udpserv_port);
+    port = strtol_wrapper(opts->config[CONF_UDPSERV_PORT],
+            1, MAX_PORT, NO_EXIT_UPON_ERR, &is_err);
+    if(is_err != FKO_SUCCESS)
+    {
+        log_msg(LOG_ERR, "[*] Invalid max UDPSERV_PORT value.");
+        return -1;
+    }
+    s_timeout = strtol_wrapper(opts->config[CONF_UDPSERV_SELECT_TIMEOUT],
+            1, RCHK_MAX_UDPSERV_SELECT_TIMEOUT, NO_EXIT_UPON_ERR, &is_err);
+    if(is_err != FKO_SUCCESS)
+    {
+        log_msg(LOG_ERR, "[*] Invalid max UDPSERV_SELECT_TIMEOUT value.");
+        return -1;
+    }
+    rules_chk_threshold = strtol_wrapper(opts->config[CONF_RULES_CHECK_THRESHOLD],
+            0, RCHK_MAX_RULES_CHECK_THRESHOLD, NO_EXIT_UPON_ERR, &is_err);
+    if(is_err != FKO_SUCCESS)
+    {
+        log_msg(LOG_ERR, "[*] invalid RULES_CHECK_THRESHOLD");
+        clean_exit(opts, FW_CLEANUP, EXIT_FAILURE);
+    }
+
+    log_msg(LOG_INFO, "Kicking off UDP server to listen on port %i.", port);
 
     /* Now, let's make a UDP server
     */
@@ -98,7 +122,7 @@ run_udp_server(fko_srv_options_t *opts)
     memset(&saddr, 0x0, sizeof(saddr));
     saddr.sin_family      = AF_INET;           /* Internet address family */
     saddr.sin_addr.s_addr = htonl(INADDR_ANY); /* Any incoming interface */
-    saddr.sin_port        = htons(opts->udpserv_port); /* Local port */
+    saddr.sin_port        = htons(port);       /* Local port */
 
     /* Bind to the local address */
     if (bind(s_sock, (struct sockaddr *) &saddr, sizeof(saddr)) < 0)
@@ -109,13 +133,20 @@ run_udp_server(fko_srv_options_t *opts)
         return -1;
     }
 
+    /* Initialize our signal handlers. You can check the return value for
+     * the number of signals that were *not* set.  Those that were not set
+     * will be listed in the log/stderr output.
+    */
+    if(set_sig_handlers() > 0)
+        log_msg(LOG_ERR, "Errors encountered when setting signal handlers.");
+
     FD_ZERO(&sfd_set);
 
     /* Now loop and receive SPA packets
     */
     while(1)
     {
-        if(sig_do_stop())
+        if(sig_do_stop(opts))
         {
             if(opts->verbose)
                 log_msg(LOG_INFO,
@@ -129,10 +160,10 @@ run_udp_server(fko_srv_options_t *opts)
             */
             if(opts->enable_fw)
             {
-                if(opts->rules_chk_threshold > 0)
+                if(rules_chk_threshold > 0)
                 {
                     opts->check_rules_ctr++;
-                    if ((opts->check_rules_ctr % opts->rules_chk_threshold) == 0)
+                    if ((opts->check_rules_ctr % rules_chk_threshold) == 0)
                     {
                         chk_rm_all = 1;
                         opts->check_rules_ctr = 0;
@@ -154,7 +185,7 @@ run_udp_server(fko_srv_options_t *opts)
         /* Set our select timeout to (500ms by default).
         */
         tv.tv_sec = 0;
-        tv.tv_usec = opts->udpserv_select_timeout;
+        tv.tv_usec = s_timeout;
 
         selval = select(s_sock+1, &sfd_set, NULL, NULL, &tv);
 
@@ -189,20 +220,18 @@ run_udp_server(fko_srv_options_t *opts)
         pkt_len = recvfrom(s_sock, dgram_msg, MAX_SPA_PACKET_LEN,
                 0, (struct sockaddr *)&caddr, &clen);
 
-        dgram_msg[pkt_len] = 0x0;
-
-        if(opts->verbose)
+        if(pkt_len > 0 && pkt_len <= MAX_SPA_PACKET_LEN)
         {
-            memset(sipbuf, 0x0, MAX_IPV4_STR_LEN);
-            inet_ntop(AF_INET, &(caddr.sin_addr.s_addr), sipbuf, MAX_IPV4_STR_LEN);
-            log_msg(LOG_INFO, "udp_server: Got UDP datagram (%d bytes) from: %s",
-                    pkt_len, sipbuf);
-        }
+            dgram_msg[pkt_len] = 0x0;
 
-        /* Expect the data to not be too large
-        */
-        if(pkt_len <= MAX_SPA_PACKET_LEN)
-        {
+            if(opts->verbose)
+            {
+                memset(sipbuf, 0x0, MAX_IPV4_STR_LEN);
+                inet_ntop(AF_INET, &(caddr.sin_addr.s_addr), sipbuf, MAX_IPV4_STR_LEN);
+                log_msg(LOG_INFO, "udp_server: Got UDP datagram (%d bytes) from: %s",
+                        pkt_len, sipbuf);
+            }
+
             /* Copy the packet for SPA processing
             */
             strlcpy((char *)opts->spa_pkt.packet_data, dgram_msg, pkt_len+1);
@@ -212,6 +241,7 @@ run_udp_server(fko_srv_options_t *opts)
             opts->spa_pkt.packet_dst_ip   = saddr.sin_addr.s_addr;
             opts->spa_pkt.packet_src_port = ntohs(caddr.sin_port);
             opts->spa_pkt.packet_dst_port = ntohs(saddr.sin_port);
+            opts->spa_pkt.sdp_id   = 0;
 
             incoming_spa(opts);
         }

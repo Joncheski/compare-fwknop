@@ -77,6 +77,7 @@ sub new {
     my $enc_mode  = shift;
     my $hmac_pw   = shift || '';
     my $hmac_type = shift;
+    my $sdp_client_id = shift;
     my $res;
 
     my $ctx;
@@ -87,7 +88,7 @@ sub new {
     if(defined($data) and $data) {
         if(defined($dc_pw) and $dc_pw) {
             $ctx = _init_ctx_with_data($data, $dc_pw, length($dc_pw),
-                        $enc_mode, $hmac_pw, length($hmac_pw), $hmac_type);
+                        $enc_mode, $hmac_pw, length($hmac_pw), $hmac_type, $sdp_client_id);
         } else {
             $ctx = _init_ctx_with_data_only($data);
         }
@@ -869,7 +870,7 @@ server.  The timeout value is provided via the C<client_timeout> data field.
 
 =item * B<FKO_LOCAL_NAT_ACCESS_MSG>
 
-This is similar to the C<FKO_NAT_ACCESS> request except the NAT is to the
+This is similar to the C<FKO_NAT_ACCESS> request exept the NAT is to the
 local to the server (i.e. a service listening on 127.0.0.1).
 
 =item * B<FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCES_MSG>

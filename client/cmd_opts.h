@@ -1,11 +1,12 @@
-/**
- * \file client/cmd_opts.h
+/*
+ ******************************************************************************
  *
- * \brief Header file for fwknop command line options.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    cmd_opts.h
+ *
+ * Purpose: Header file for fwknop command line options.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -38,8 +39,6 @@ enum {
     NAT_LOCAL,
     NAT_PORT,
     NAT_RAND_PORT,
-    NO_HOME_DIR,
-    NO_RC_FILE,
     TIME_OFFSET_MINUS,
     TIME_OFFSET_PLUS,
     SAVE_RC_STANZA,
@@ -66,6 +65,10 @@ enum {
     FD_SET_STDIN,
     FD_SET_ALT,
     FAULT_INJECTION_TAG,
+    DISABLE_SDP_MODE,
+    SDP_ID,
+    SERVICE_IDS,
+    DISABLE_SDP_CTRL_CLIENT,
 
     /* Put GPG-related items below the following line */
     GPG_ENCRYPTION      = 0x200,
@@ -75,6 +78,7 @@ enum {
     GPG_EXE_PATH,
     GPG_AGENT,
     GPG_ALLOW_NO_SIGNING_PW,
+
     NOOP /* Just to be a marker for the end */
 };
 
@@ -97,6 +101,8 @@ static struct option cmd_opts[] =
     {"no-save-args",        0, NULL, NO_SAVE_ARGS},
     {"server-cmd",          1, NULL, 'C'},
     {"digest-type",         1, NULL, FKO_DIGEST_NAME},
+    {"disable-sdp",         0, NULL, DISABLE_SDP_MODE},
+    {"disable-ctrl-client", 0, NULL, DISABLE_SDP_CTRL_CLIENT},
     {"destination",         1, NULL, 'D'},
     {"save-args-file",      1, NULL, 'E'},
     {"encryption-mode",     1, NULL, ENCRYPTION_MODE},
@@ -131,8 +137,6 @@ static struct option cmd_opts[] =
     {"nat-local",           0, NULL, NAT_LOCAL},
     {"nat-port",            1, NULL, NAT_PORT},
     {"nat-rand-port",       0, NULL, NAT_RAND_PORT},
-    {"no-home-dir",         0, NULL, NO_HOME_DIR},
-    {"no-rc-file",          0, NULL, NO_RC_FILE},
     {"server-port",         1, NULL, 'p'},
     {"server-proto",        1, NULL, 'P'},
     {"spoof-source",        1, NULL, 'Q'},
@@ -143,6 +147,8 @@ static struct option cmd_opts[] =
     {"resolve-ip-https",    0, NULL, 'R'}, /* synonym, default is HTTPS */
     {"resolve-http-only",   0, NULL, RESOLVE_HTTP_ONLY},
     {"resolve-url",         1, NULL, RESOLVE_URL},
+    {"sdp-id",              1, NULL, SDP_ID},
+    {"services",            1, NULL, SERVICE_IDS},
     {"server-resolve-ipv4", 0, NULL, SERVER_RESOLVE_IPV4},
     {"show-last",           0, NULL, SHOW_LAST_ARGS},
     {"source-ip",           0, NULL, 's'},

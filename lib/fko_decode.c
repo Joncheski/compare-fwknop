@@ -1,11 +1,12 @@
-/**
- * \file lib/fko_decode.c
+/*
+ *****************************************************************************
  *
- * \brief Decode an FKO SPA message after decryption.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_decode.c
+ *
+ * Purpose: Decode an FKO SPA message after decryption.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -32,15 +33,17 @@
 #include "cipher_funcs.h"
 #include "base64.h"
 #include "digest.h"
+#include "dbg.h"
 
 #define FIELD_PARSERS 9
+#define SDP_FIELD_PARSERS 6
 
 /* Char used to separate SPA fields in an SPA packet */
 #define SPA_FIELD_SEPARATOR    ":"
 
-#ifdef HAVE_C_UNIT_TESTS /* LCOV_EXCL_START */
+#ifdef HAVE_C_UNIT_TESTS
 DECLARE_TEST_SUITE(fko_decode, "FKO decode test suite");
-#endif /* LCOV_EXCL_STOP */
+#endif
 
 static int
 num_fields(char *str)
@@ -107,13 +110,6 @@ verify_digest(char *tbuf, int t_size, fko_ctx_t ctx)
             sha512_base64(tbuf, (unsigned char*)ctx->encoded_msg, ctx->encoded_msg_len);
             break;
 
-        /* Note that we check SHA3_256 and SHA3_512 below because the
-         * digest lengths for these are the same as SHA256 and SHA512
-         * respectively, and setting the digest type for an incoming
-         * decrypted SPA packet is done initially by looking at the
-         * length.
-         */
-
         default: /* Invalid or unsupported digest */
             return(FKO_ERROR_INVALID_DIGEST_TYPE);
     }
@@ -122,41 +118,7 @@ verify_digest(char *tbuf, int t_size, fko_ctx_t ctx)
      * digest in the message data.
     */
     if(constant_runtime_cmp(ctx->digest, tbuf, t_size) != 0)
-    {
-        /* Could potentially also have been SHA3_256 or SHA3_512 */
-        if(ctx->digest_type == FKO_DIGEST_SHA256)
-        {
-            memset(tbuf, 0, FKO_ENCODE_TMP_BUF_SIZE);
-            sha3_256_base64(tbuf, (unsigned char*)ctx->encoded_msg, ctx->encoded_msg_len);
-            if(constant_runtime_cmp(ctx->digest, tbuf, t_size) != 0)
-            {
-                return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
-            }
-            else
-            {
-                ctx->digest_type = FKO_DIGEST_SHA3_256;
-                ctx->digest_len  = SHA3_256_B64_LEN;
-            }
-
-        }
-        else if(ctx->digest_type == FKO_DIGEST_SHA512)
-        {
-            memset(tbuf, 0, FKO_ENCODE_TMP_BUF_SIZE);
-            sha3_512_base64(tbuf, (unsigned char*)ctx->encoded_msg, ctx->encoded_msg_len);
-            if(constant_runtime_cmp(ctx->digest, tbuf, t_size) != 0)
-            {
-                return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
-            }
-            else
-            {
-                ctx->digest_type = FKO_DIGEST_SHA3_512;
-                ctx->digest_len  = SHA3_512_B64_LEN;
-            }
-
-        }
-        else
-            return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
-    }
+        return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
 
     return FKO_SUCCESS;
 }
@@ -176,7 +138,6 @@ is_valid_digest_len(int t_size, fko_ctx_t ctx)
             ctx->digest_len  = SHA1_B64_LEN;
             break;
 
-        /* Could also match SHA3_256_B64_LEN, handled in verify_digest() */
         case SHA256_B64_LEN:
             ctx->digest_type = FKO_DIGEST_SHA256;
             ctx->digest_len  = SHA256_B64_LEN;
@@ -187,7 +148,6 @@ is_valid_digest_len(int t_size, fko_ctx_t ctx)
             ctx->digest_len  = SHA384_B64_LEN;
             break;
 
-        /* Could also match SHA3_512_B64_LEN, handled in verify_digest() */
         case SHA512_B64_LEN:
             ctx->digest_type = FKO_DIGEST_SHA512;
             ctx->digest_len  = SHA512_B64_LEN;
@@ -233,6 +193,15 @@ parse_msg(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
         {
             return(FKO_ERROR_INVALID_DATA_DECODE_MESSAGE_VALIDFAIL);
         }
+    }
+    else if(ctx->message_type == FKO_SERVICE_ACCESS_MSG ||
+    		ctx->message_type == FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG)
+    {
+    	// Require a message like: 1.2.3.4,12,53
+    	if(validate_service_access_msg(ctx->message) != FKO_SUCCESS)
+    	{
+    		return(FKO_ERROR_INVALID_DATA_DECODE_ACCESS_VALIDFAIL);
+    	}
     }
     else
     {
@@ -397,17 +366,21 @@ parse_msg_type(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
      * number of SPA fields is also valid for the type
     */
     remaining_fields = num_fields(*ndx);
+    debug("parse_msg_type() : remaining fields after msg type: %d", remaining_fields);
+    debug("parse_msg_type() : and the buffer: \n\t%s\n", *ndx);
 
     switch(ctx->message_type)
     {
         /* optional server_auth + digest */
         case FKO_COMMAND_MSG:
+        case FKO_SERVICE_ACCESS_MSG:
         case FKO_ACCESS_MSG:
             if(remaining_fields > 2)
                 return FKO_ERROR_INVALID_DATA_DECODE_WRONG_NUM_FIELDS;
             break;
 
         /* nat or client timeout + optional server_auth + digest */
+        case FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG:
         case FKO_NAT_ACCESS_MSG:
         case FKO_LOCAL_NAT_ACCESS_MSG:
         case FKO_CLIENT_TIMEOUT_ACCESS_MSG:
@@ -524,44 +497,84 @@ parse_rand_val(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
     return FKO_SUCCESS;
 }
 
+
 /* Decode the encoded SPA data.
 */
 int
 fko_decode_spa_data(fko_ctx_t ctx)
 {
     char       *tbuf, *ndx;
-    int         t_size, i, res;
+    int         t_size, i, res, num_field_parsers=0;
+    field_parser_ptr_t *field_parser = NULL;
 
     /* Array of function pointers to SPA field parsing functions
     */
-    int (*field_parser[FIELD_PARSERS])(char *tbuf, char **ndx, int *t_size, fko_ctx_t ctx)
-        = { parse_rand_val,       /* Extract random value */
-            parse_username,       /* Extract username */
-            parse_timestamp,      /* Client timestamp */
-            parse_version,        /* SPA version */
-            parse_msg_type,       /* SPA msg type */
-            parse_msg,            /* SPA msg string */
-            parse_nat_msg,        /* SPA NAT msg string */
-            parse_server_auth,    /* optional server authentication method */
-            parse_client_timeout  /* client defined timeout */
-          };
+    if(ctx->disable_sdp_mode)
+    {
+        num_field_parsers = FIELD_PARSERS;
+        field_parser = calloc(num_field_parsers, sizeof(field_parser_ptr_t));
 
+        field_parser[0]    = parse_rand_val;       /* Extract random value */
+        field_parser[1]    = parse_username;       /* Extract username */
+        field_parser[2]    = parse_timestamp;      /* Client timestamp */
+        field_parser[3]    = parse_version;        /* SPA version */
+        field_parser[4]    = parse_msg_type;       /* SPA msg type */
+        field_parser[5]    = parse_msg;            /* SPA msg string */
+        field_parser[6]    = parse_nat_msg;        /* SPA NAT msg string */
+        field_parser[7]    = parse_server_auth;    /* optional server authentication method */
+        field_parser[8]    = parse_client_timeout; /* client defined timeout */
+    }
+    else
+    {
+        num_field_parsers = SDP_FIELD_PARSERS;
+        field_parser = calloc(num_field_parsers, sizeof(field_parser_ptr_t));
+
+        field_parser[0]    = parse_rand_val;       /* Extract random value */
+        field_parser[1]    = parse_timestamp;      /* Client timestamp */
+        field_parser[2]    = parse_msg_type;       /* SPA msg type */
+        field_parser[3]    = parse_msg;            /* SPA msg string */
+        field_parser[4]    = parse_nat_msg;        /* SPA NAT msg string */
+        field_parser[5]    = parse_server_auth;    /* optional server authentication method */
+
+    }
     if (! is_valid_encoded_msg_len(ctx->encoded_msg_len))
+    {
+        free(field_parser);
         return(FKO_ERROR_INVALID_DATA_DECODE_MSGLEN_VALIDFAIL);
+    }
 
     /* Make sure there are no non-ascii printable chars
     */
     for (i=0; i < (int)strnlen(ctx->encoded_msg, MAX_SPA_ENCODED_MSG_SIZE); i++)
-        if(isprint((int)(unsigned char)ctx->encoded_msg[i]) == 0)
+    {
+        if(isprint(ctx->encoded_msg[i]) == 0)
+        {
+            free(field_parser);
             return(FKO_ERROR_INVALID_DATA_DECODE_NON_ASCII);
+        }
+    }
 
     /* Make sure there are enough fields in the SPA packet
      * delimited with ':' chars
     */
     ndx = ctx->encoded_msg;
 
-    if (num_fields(ndx) < MIN_SPA_FIELDS)
-        return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
+    if(ctx->disable_sdp_mode)
+    {
+        if (num_fields(ndx) < MIN_SPA_FIELDS)
+        {
+            free(field_parser);
+            return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
+        }
+    }
+    else
+    {
+        if (num_fields(ndx) < MIN_SDP_SPA_FIELDS)
+        {
+            free(field_parser);
+            return(FKO_ERROR_INVALID_DATA_DECODE_LT_MIN_FIELDS);
+        }
+    }
 
     ndx += last_field(ndx);
 
@@ -571,7 +584,10 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     res = is_valid_digest_len(t_size, ctx);
     if(res != FKO_SUCCESS)
+    {
+        free(field_parser);
         return res;
+    }
 
     if(ctx->digest != NULL)
         free(ctx->digest);
@@ -582,7 +598,10 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     ctx->digest = strdup(ndx);
     if(ctx->digest == NULL)
+    {
+        free(field_parser);
         return(FKO_ERROR_MEMORY_ALLOCATION);
+    }
 
     /* Chop the digest off of the encoded_msg bucket...
     */
@@ -595,13 +614,17 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     tbuf = calloc(1, FKO_ENCODE_TMP_BUF_SIZE);
     if(tbuf == NULL)
+    {
+        free(field_parser);
         return(FKO_ERROR_MEMORY_ALLOCATION);
+    }
 
     /* Can now verify the digest.
     */
     res = verify_digest(tbuf, t_size, ctx);
     if(res != FKO_SUCCESS)
     {
+        free(field_parser);
         free(tbuf);
         return(FKO_ERROR_DIGEST_VERIFICATION_FAILED);
     }
@@ -611,11 +634,12 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     ndx = ctx->encoded_msg;
 
-    for (i=0; i < FIELD_PARSERS; i++)
+    for (i=0; i < num_field_parsers; i++)
     {
         res = (*field_parser[i])(tbuf, &ndx, &t_size, ctx);
         if(res != FKO_SUCCESS)
         {
+            free(field_parser);
             free(tbuf);
             return res;
         }
@@ -625,6 +649,10 @@ fko_decode_spa_data(fko_ctx_t ctx)
     */
     free(tbuf);
 
+    /* Done with field_parser
+     */
+    free(field_parser);
+
     /* Call the context initialized.
     */
     ctx->initval = FKO_CTX_INITIALIZED;
@@ -633,7 +661,7 @@ fko_decode_spa_data(fko_ctx_t ctx)
     return(FKO_SUCCESS);
 }
 
-#ifdef HAVE_C_UNIT_TESTS /* LCOV_EXCL_START */
+#ifdef HAVE_C_UNIT_TESTS
 
 DECLARE_UTEST(num_fields, "Count the number of SPA fields in a SPA packet")
 {
@@ -642,7 +670,7 @@ DECLARE_UTEST(num_fields, "Count the number of SPA fields in a SPA packet")
 
     /* Zeroing the spa packet */
     memset(spa_packet, 0, sizeof(spa_packet));
-
+    
     /* Check we are able to count the number of SPA fields */
     for(ix_field=0 ; ix_field<=MAX_SPA_FIELDS+2 ; ix_field++)
     {
@@ -666,7 +694,7 @@ DECLARE_UTEST(last_field, "Count the number of bytes to the last :")
 
     /* Zeroing the spa packet */
     memset(spa_packet, 0, sizeof(spa_packet));
-
+    
     /* Check for a valid count when the number of field is less than MAX_SPA_FIELDS  */
     CU_ASSERT(last_field("a:") == 2);
     CU_ASSERT(last_field("ab:abc:") == 7);
@@ -692,5 +720,6 @@ int register_ts_fko_decode(void)
     return register_ts(&TEST_SUITE(fko_decode));
 }
 
-#endif /* HAVE_C_UNIT_TESTS */ /* LCOV_EXCL_STOP */
+#endif /* HAVE_C_UNIT_TESTS */
+
 /***EOF***/

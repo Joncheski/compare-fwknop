@@ -13,39 +13,39 @@
 %define _mandir /usr/share/man
 
 Name:		fwknop
-Version:	2.6.9
+Version:	2.6.7
 Epoch:		1
 Release:	1%{?dist}
 Summary:	Firewall Knock Operator client. An implementation of Single Packet Authorization.
 
 Group:		Applications/Internet
-License:	GPL v2+
+License:	GPL
 URL:		http://www.cipherdyne.org/fwknop/
 Source0:	fwknop-%{version}.tar.gz
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 BuildRequires:	gpg, gpgme-devel, libpcap-devel, iptables
-Requires:	libfko >= 3.0.0, iptables
+Requires:	libfko >= 2.0.3, iptables
 
 
 %package -n libfko
-Version:	3.0.0
+Version:	2.0.3
 Release:	1
 Summary:	The fwknop library
 Group:		Development/Libraries
 Requires:   gpg, gpgme
 
 %package -n libfko-devel
-Version:	3.0.0
+Version:	2.0.3
 Release:	1
 Summary:	The fwknop library header and API docs
 Group:		Development/Libraries
-Requires:	libfko >= 3.0.0
+Requires:	libfko >= 2.0.3
 
 %package server
 Summary:	The Firewall Knock Operator server. An implementation of Single Packet Authorization.
 Group:		System Environment/Daemons
-Requires:	libfko => 3.0.0, libpcap, iptables
+Requires:	libfko => 2.0.3, libpcap, iptables
 
 
 %description
@@ -142,17 +142,6 @@ fi
 %config(noreplace) %attr(0600,root,root) %{_sysconfdir}/fwknop/access.conf
 
 %changelog
-* Wed Jun 08 2016 <mbr@cipherdyne.org> - 2.6.9
-- fwknop-2.6.9 release.
-- Bumped libfko version to 3.0.0 to account for SHA3 hash support. This
-  conforms to libtool convensions, e.g.
-  http://www.delorie.com/gnu/docs/libtool/libtool_35.html
-
-* Wed Dec 23 2015 <mbr@cipherdyne.org> - 2.6.8
-- fwknop-2.6.8 release.
-- Bumped libfko version to 2.0.4 to account for fko_set_username() crash
-  fixed in 21149faf.
-
 * Mon Aug 24 2015 <mbr@cipherdyne.org> - 2.6.7
 - fwknop-2.6.7 release.
 

@@ -1,11 +1,12 @@
-/**
- * \file server/fw_util_iptables.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for fw_util_iptables.c.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fw_util_iptables.h
+ *
+ * Purpose: Header file for fw_util_iptables.c.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -30,6 +31,8 @@
 #ifndef FW_UTIL_IPTABLES_H
 #define FW_UTIL_IPTABLES_H
 
+#include <inttypes.h>
+
 #define SNAT_TARGET_BUFSIZE         64
 
 #if HAVE_EXECVPE
@@ -41,9 +44,11 @@
 /* iptables command args
 */
 #define IPT_CHK_RULE_ARGS       "-C %s %s" /* the other macros add SH_REDIR if necessary */
+#define IPT_CONNMARK_ARGS       "-t %s -p %i -s %s -d %s --dport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j CONNMARK --set-mark %" PRIu32 SH_REDIR
 #define IPT_RULE_ARGS           "-t %s -p %i -s %s -d %s --dport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s" SH_REDIR
+#define IPT_FWD_RULE_ARGS       "-t %s -p %i -s %s -d %s --dport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s" SH_REDIR
 #define IPT_OUT_RULE_ARGS       "-t %s -p %i -d %s -s %s --sport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s" SH_REDIR
-#define IPT_FWD_RULE_ARGS       "-t %s -p %i -s %s --dport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s" SH_REDIR
+#define IPT_CONNMARK_ALL_ARGS   "-t %s -s %s -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j CONNMARK --set-mark %" PRIu32 SH_REDIR
 #define IPT_FWD_ALL_RULE_ARGS   "-t %s -s %s -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s" SH_REDIR
 #define IPT_DNAT_RULE_ARGS      "-t %s -p %i -s %s -d %s --dport %i -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s --to-destination %s:%i" SH_REDIR
 #define IPT_DNAT_ALL_RULE_ARGS  "-t %s -s %s -d %s -m comment --comment " EXPIRE_COMMENT_PREFIX "%u -j %s --to-destination %s" SH_REDIR
@@ -63,11 +68,6 @@
 #define IPT_LIST_RULES_ARGS     "-t %s -L %s --line-numbers -n" SH_REDIR
 #define IPT_LIST_ALL_RULES_ARGS "-t %s -v -n -L --line-numbers" SH_REDIR
 #define IPT_ANY_IP              "0.0.0.0/0"
-
-#if USE_LIBNETFILTER_QUEUE
-  #define IPT_NFQ_ADD_ARGS "-t %s -A %s -p udp -m udp --dport %s -j NFQUEUE --queue-num %s"
-  #define IPT_NFQ_ADD_ARGS_WITH_IF "-t %s -A %s -i %s -p udp -m udp --dport %s -j NFQUEUE --queue-num %s"
-#endif
 
 int validate_ipt_chain_conf(const char * const chain_str);
 

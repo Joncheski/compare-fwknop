@@ -78,7 +78,7 @@ typedef u_int32_t uint32_t;
   #endif
 #endif
 
-/* Work out endianness
+/* Work out endianess (sp?)
 */
 #if HAVE_ENDIAN_H       /* Should cover most Linux systems */
   #include <endian.h>

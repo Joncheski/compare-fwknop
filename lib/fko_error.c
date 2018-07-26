@@ -1,11 +1,12 @@
-/**
- * \file lib/fko_error.c
+/*
+ *****************************************************************************
  *
- * \brief Error handling functions for libfko
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fko_error.c
+ *
+ * Purpose: Error handling functions for libfko
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -173,6 +174,9 @@ fko_errstr(const int err_code)
         case FKO_ERROR_INVALID_DATA_ENCODE_MESSAGE_TOOBIG:
             return("Args contain invalid data: FKO_ERROR_INVALID_DATA_ENCODE_MESSAGE_TOOBIG");
 
+        case FKO_ERROR_INVALID_DATA_ENCODE_SDPCLIENTLEN_VALIDFAIL:
+            return("Args contain invalid data: FKO_ERROR_INVALID_DATA_ENCODE_SDPCLIENTLEN_VALIDFAIL");
+
         case FKO_ERROR_INVALID_DATA_ENCODE_MSGLEN_VALIDFAIL:
             return("Args contain invalid data: FKO_ERROR_INVALID_DATA_ENCODE_MSGLEN_VALIDFAIL");
 
@@ -323,6 +327,18 @@ fko_errstr(const int err_code)
         case FKO_ERROR_INVALID_DATA_UTIL_STRTOL_GT_MAX:
             return("Args contain invalid data: FKO_ERROR_INVALID_DATA_UTIL_STRTOL_GT_MAX");
 
+        case FKO_ERROR_INVALID_DATA_UTIL_STRTOUL_LT_MIN:
+            return("Args contain invalid data: FKO_ERROR_INVALID_DATA_UTIL_STRTOUL_LT_MIN");
+
+        case FKO_ERROR_INVALID_DATA_UTIL_STRTOUL_GT_MAX:
+            return("Args contain invalid data: FKO_ERROR_INVALID_DATA_UTIL_STRTOUL_GT_MAX");
+
+        case FKO_ERROR_INVALID_DATA_UTIL_STRTOULL_LT_MIN:
+            return("Args contain invalid data: FKO_ERROR_INVALID_DATA_UTIL_STRTOULL_LT_MIN");
+
+        case FKO_ERROR_INVALID_DATA_UTIL_STRTOULL_GT_MAX:
+            return("Args contain invalid data: FKO_ERROR_INVALID_DATA_UTIL_STRTOULL_GT_MAX");
+
         case FKO_ERROR_DATA_TOO_LARGE:
             return("Value or Size of the data exceeded the max allowed");
 
@@ -420,7 +436,7 @@ fko_errstr(const int err_code)
             return("The key for the given signer was not found");
 
         case FKO_ERROR_GPGME_SIGNER_KEY_AMBIGUOUS:
-            return("Ambiguous name/id for the signer key (multiple matches)");
+            return("Ambiguous name/id for the signer key (mulitple matches)");
 
         case FKO_ERROR_GPGME_ADD_SIGNER:
             return("Error adding the signer key to the gpgme context");
@@ -435,7 +451,7 @@ fko_errstr(const int err_code)
             return("The key for the given recipient was not found");
 
         case FKO_ERROR_GPGME_RECIPIENT_KEY_AMBIGUOUS:
-            return("Ambiguous name/id for the recipient key (multiple matches)");
+            return("Ambiguous name/id for the recipient key (mulitple matches)");
 
         case FKO_ERROR_GPGME_DECRYPT_FAILED:
             return("Decryption operation failed");

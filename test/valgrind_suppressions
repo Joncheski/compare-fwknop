@@ -90,6 +90,17 @@
    fun:pcap_capture
    fun:main
 }
+{
+   pcap9
+   Memcheck:Param
+   socketcall.bind(my_addr.sa_data)
+   fun:bind
+   obj:/usr/lib/x86_64-linux-gnu/libpcap.so.1.5.3
+   fun:pcap_activate
+   fun:pcap_open_live
+   fun:pcap_capture
+   fun:main
+}
 
 ### libfiu fault injection suppressions
 {
@@ -110,16 +121,15 @@
    ...
 }
 
-### libfaketime supression
+### OpenSSL
 {
-   <insert_a_suppression_name_here>
+   openssl1
    Memcheck:Leak
    match-leak-kinds: reachable
-   fun:calloc
-   fun:_dlerror_run
-   fun:dlsym
-   fun:ftpl_init
-   fun:call_init.part.0
-   fun:_dl_init
+   ...
+   fun:CRYPTO_malloc
+   ...
+   obj:*libcrypto.so.1.0.0
    ...
 }
+

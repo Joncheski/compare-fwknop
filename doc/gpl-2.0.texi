@@ -1,13 +1,13 @@
 @node Library Copying
 @appendix GNU GENERAL PUBLIC LICENSE
 
-@cindex GPLv2+, General Public License
+@cindex GPL, General Public License
 
 @c The GNU General Public License.
-@center Version 2 (or any later version), June 1991
+@center Version 2, June 1991
 
 @c This file is intended to be included within another document,
-@c hence no sectioning command or @node.
+@c hence no sectioning command or @node.  
 
 @display
 Copyright @copyright{} 1989, 1991 Free Software Foundation, Inc.
@@ -71,7 +71,7 @@ modification follow.
 @appendixsec TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 @end iftex
 @ifinfo
-@center GNU GENERAL PUBLIC LICENSE v2+
+@center GNU GENERAL PUBLIC LICENSE
 @center TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 @end ifinfo
 

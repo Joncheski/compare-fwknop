@@ -1,10 +1,12 @@
-/**
- * \file server/fwknopd.c
+/*
+ *****************************************************************************
  *
- * \brief An implementation of an fwknop server.
+ * File:    fwknopd.c
+ *
+ * Purpose: An implementation of an fwknop server.
  *
  *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -36,10 +38,16 @@
 #include "replay_cache.h"
 #include "tcp_server.h"
 #include "udp_server.h"
+#include <json-c/json.h>
+#include "fwknopd_errors.h"
+#include "sdp_ctrl_client.h"
+#include "sdp_message.h"
+#include "dbg.h"
+#include "connection_tracker.h"
+#include "control_client.h"
+#include "service.h"
+#include <pthread.h>
 
-#if USE_LIBNETFILTER_QUEUE
-  #include "nfq_capture.h"
-#endif
 #if USE_LIBPCAP
   #include "pcap_capture.h"
 #endif
@@ -55,6 +63,7 @@ static int status_fwknopd(fko_srv_options_t * const opts);
 static int restart_fwknopd(fko_srv_options_t * const opts);
 static int write_pid_file(fko_srv_options_t *opts);
 static int handle_signals(fko_srv_options_t *opts);
+static int signal_to_dump_config(fko_srv_options_t * const opts);
 static void setup_pid(fko_srv_options_t *opts);
 static void init_digest_cache(fko_srv_options_t *opts);
 static void set_locale(fko_srv_options_t *opts);
@@ -77,10 +86,11 @@ int
 main(int argc, char **argv)
 {
     fko_srv_options_t   opts;
-    int depth = 0;
+    int restarted = 0;
 
     while(1)
     {
+
         /* Handle command line
         */
         config_init(&opts, argc, argv);
@@ -116,6 +126,7 @@ main(int argc, char **argv)
         /* Update the verbosity level for the log module */
         log_set_verbosity(LOG_DEFAULT_VERBOSITY + opts.verbose);
 
+
 #if HAVE_LOCALE_H
         /* Set the locale if specified.
         */
@@ -128,14 +139,6 @@ main(int argc, char **argv)
         if(!opts.afl_fuzzing
                 && ! check_dir_path((const char *)opts.config[CONF_FWKNOP_RUN_DIR], "Run", 0))
             clean_exit(&opts, NO_FW_CLEANUP, EXIT_FAILURE);
-        /* Initialize our signal handlers. You can check the return value for
-         * the number of signals that were *not* set.  Those that were not set
-         * will be listed in the log/stderr output.
-        */
-        if(set_sig_handlers() > 0) {
-            log_msg(LOG_ERR, "Errors encountered when setting signal handlers.");
-            clean_exit(&opts, NO_FW_CLEANUP, EXIT_FAILURE);
-        }
 
         /* Initialize the firewall rules handler based on the fwknopd.conf
          * file, but (for iptables firewalls) don't flush any rules or create
@@ -155,30 +158,32 @@ main(int argc, char **argv)
         if(opts.fw_flush == 1)
         {
             fprintf(stdout, "Deleting any existing firewall rules...\n");
-            opts.enable_fw = 1;
             clean_exit(&opts, FW_CLEANUP, EXIT_SUCCESS);
         }
 
-        if (opts.config[CONF_ACCESS_FOLDER] != NULL) //If we have an access folder, process it
-        {
-            if (parse_access_folder(&opts, opts.config[CONF_ACCESS_FOLDER], &depth) != EXIT_SUCCESS)
-            {
-                clean_exit(&opts, NO_FW_CLEANUP, EXIT_FAILURE);
-            }
-        }
-        /* Process the access.conf file, but only if no access.conf folder was specified.
+        /* If everything is configured to run SDP CTRL CLIENT and user asked for dump config
+         * just send signal to hopefully running gateway and exit.
         */
-        else if (parse_access_file(&opts, opts.config[CONF_ACCESS_FILE], &depth) != EXIT_SUCCESS)
+        if(opts.dump_config == 1 &&
+           strncasecmp(opts.config[CONF_DISABLE_SDP_CTRL_CLIENT], "N", 1) == 0)
         {
-            clean_exit(&opts, NO_FW_CLEANUP, EXIT_FAILURE);
+            fprintf(stdout, "Signaling to fwknopd to dump config...\n");
+            clean_exit(&opts, FW_CLEANUP, signal_to_dump_config(&opts));
         }
 
-        /* We must have at least one valid access stanza at this point
-        */
-        if(! valid_access_stanzas(opts.acc_stanzas))
+        // if SDP control client is disabled
+        // read the access data from the access.conf file
+        if(strncasecmp(opts.config[CONF_DISABLE_SDP_CTRL_CLIENT], "Y", 1) == 0)
         {
-            log_msg(LOG_ERR, "Fatal, could not find any valid access.conf stanzas");
-            clean_exit(&opts, NO_FW_CLEANUP, EXIT_FAILURE);
+            /* Process the access.conf file.
+            */
+            parse_access_file(&opts);
+        }
+        else
+        {
+            // connect to controller and get service and access lists
+            if(get_management_data_from_controller(&opts) != FWKNOPD_SUCCESS)
+                clean_exit(&opts, FW_CLEANUP, EXIT_FAILURE);
         }
 
         /* Show config (including access.conf vars) and exit dump config was
@@ -187,27 +192,52 @@ main(int argc, char **argv)
         if(opts.dump_config == 1)
         {
             dump_config(&opts);
+            dump_service_list(&opts);
             dump_access_list(&opts);
             clean_exit(&opts, NO_FW_CLEANUP, EXIT_SUCCESS);
         }
 
-        /* Now is the right time to bail if we're just parsing the configs
-        */
-        if(opts.exit_after_parse_config)
+        /* Do not run setup_pid if this was a restart. setup_pid calls
+         * get_running_pid, which opens and closes the PID file. The act
+         * of closing the PID file releases this process's lock on the
+         * file, resulting in any future fwknopd commands, such as
+         * 'fwknopd -S', wrongly concluding that fwknopd is not already
+         * running.
+         */
+        if(restarted)
         {
-            log_msg(LOG_INFO, "Configs parsed, exiting.");
-            clean_exit(&opts, NO_FW_CLEANUP, EXIT_SUCCESS);
+            log_msg(LOG_DEBUG, "fwknopd main: I was restarted, not checking PID.");
+            restarted = 0;
+        }
+        else
+        {
+            /* Acquire pid, become a daemon or run in the foreground, write pid
+             * to pid file.
+            */
+            log_msg(LOG_DEBUG, "fwknopd main: I was NOT restarted, checking/setting PID.");
+            setup_pid(&opts);
         }
 
-        /* Acquire pid, become a daemon or run in the foreground, write pid
-         * to pid file.
-        */
-        if(! opts.exit_parse_digest_cache)
-            setup_pid(&opts);
+        if(strncasecmp(opts.config[CONF_DISABLE_SDP_CTRL_CLIENT], "N", 1) == 0)
+        {
+            // arriving here means the server received access data
+            // from the controller, they are still connected so go
+            // ahead and start the thread to continue listening
+            if(pthread_create( &(opts.ctrl_client_thread), NULL, control_client_thread_func, (void*)&opts))
+            {
+                log_msg(LOG_ERR, "Failed to start SDP Control Client Thread. Aborting.");
+                clean_exit(&opts, FW_CLEANUP, EXIT_FAILURE);
+            }
+            else
+            {
+                log_msg(LOG_INFO, "Successfully started SDP Control Client Thread.");
+            }
+        }
 
         if(opts.verbose > 1 && opts.foreground)
         {
             dump_config(&opts);
+            dump_service_list(&opts);
             dump_access_list(&opts);
         }
 
@@ -217,9 +247,9 @@ main(int argc, char **argv)
         */
         init_digest_cache(&opts);
 
-        if(opts.exit_parse_digest_cache)
+        if(opts.exit_after_parse_config)
         {
-            log_msg(LOG_INFO, "Digest cache parsed, exiting.");
+            log_msg(LOG_INFO, "Configs parsed, exiting.");
             clean_exit(&opts, NO_FW_CLEANUP, EXIT_SUCCESS);
         }
 
@@ -244,16 +274,6 @@ main(int argc, char **argv)
         if(!opts.test && opts.enable_fw && (fw_initialize(&opts) != 1))
             clean_exit(&opts, FW_CLEANUP, EXIT_FAILURE);
 
-#if USE_LIBNETFILTER_QUEUE
-        /* If we are to acquire SPA data via a libnetfilter_queue, start it up here.
-        */
-        if(opts.enable_nfq_capture ||
-                strncasecmp(opts.config[CONF_ENABLE_NFQ_CAPTURE], "Y", 1) == 0)
-        {
-            nfq_capture(&opts);
-        }
-        else
-#endif
         /* If we are to acquire SPA data via a UDP socket, start it up here.
         */
         if(opts.enable_udp_server ||
@@ -291,14 +311,9 @@ main(int argc, char **argv)
         /* Intiate pcap capture mode...
         */
         if(!opts.enable_udp_server
-            && strncasecmp(opts.config[CONF_ENABLE_UDP_SERVER], "N", 1) == 0)
+                && strncasecmp(opts.config[CONF_ENABLE_UDP_SERVER], "N", 1) == 0)
         {
             pcap_capture(&opts);
-        }
-        else
-        {
-            log_msg(LOG_ERR, "No available capture mode specified.  Aborting.");
-            clean_exit(&opts, FW_CLEANUP, EXIT_FAILURE);
         }
 #endif
 
@@ -307,6 +322,8 @@ main(int argc, char **argv)
         */
         if(handle_signals(&opts) == 1)
             break;
+
+        restarted = 1;
     }
 
     log_msg(LOG_INFO, "Shutting Down fwknopd.");
@@ -332,6 +349,8 @@ main(int argc, char **argv)
 
     return(EXIT_SUCCESS);  /* This never gets called */
 }
+
+
 
 static void set_locale(fko_srv_options_t *opts)
 {
@@ -519,20 +538,25 @@ static void setup_pid(fko_srv_options_t *opts)
      * start-up. Otherwise, we are here as a result of a signal sent to an
      * existing process and we want to restart.
     */
+    log_msg(LOG_DEBUG, "setup_pid: checking if I am the restarted process...");
     if(get_running_pid(opts) != getpid())
     {
+        log_msg(LOG_DEBUG, "setup_pid: I am NOT the restarted process.");
         /* If foreground mode is not set, then fork off and become a daemon.
         * Otherwise, attempt to get the pid file lock and go on.
         */
         if(opts->foreground == 0)
         {
+            log_msg(LOG_DEBUG, "setup_pid: about to daemonize...");
             daemonize_process(opts);
         }
         else
         {
+            log_msg(LOG_DEBUG, "setup_pid: writing to PID file...");
             old_pid = write_pid_file(opts);
             if(old_pid > 0)
             {
+                log_msg(LOG_DEBUG, "setup_pid: write_pid_file returned old PID %d, exiting.", old_pid);
                 fprintf(stderr,
                     "[*] An instance of fwknopd is already running: (PID=%i).\n", old_pid
                 );
@@ -541,6 +565,7 @@ static void setup_pid(fko_srv_options_t *opts)
             }
             else if(old_pid < 0)
             {
+                log_msg(LOG_DEBUG, "setup_pid: write_pid_file returned negative value, lock may have failed.");
                 fprintf(stderr, "[*] PID file error. The lock may not be effective.\n");
             }
         }
@@ -608,6 +633,21 @@ static int handle_signals(fko_srv_options_t *opts)
         if(got_sighup)
         {
             log_msg(LOG_WARNING, "Got SIGHUP. Re-reading configs.");
+            if(opts->ctrl_client != NULL)
+            {
+                if(opts->ctrl_client_thread > 0)
+                {
+                    log_msg(LOG_WARNING, "Canceling ctrl client thread...");
+                    pthread_cancel(opts->ctrl_client_thread);
+                    log_msg(LOG_WARNING, "Joining ctrl client thread...");
+                    pthread_join(opts->ctrl_client_thread, NULL);
+                    log_msg(LOG_WARNING, "Ctrl client thread joined.");
+                    opts->ctrl_client_thread = 0;
+                }
+                sdp_ctrl_client_disconnect(opts->ctrl_client);
+                sdp_ctrl_client_destroy(opts->ctrl_client);
+                opts->ctrl_client = NULL;
+            }
             free_configs(opts);
             if(opts->tcp_server_pid > 0)
                 kill(opts->tcp_server_pid, SIGTERM);
@@ -624,6 +664,15 @@ static int handle_signals(fko_srv_options_t *opts)
         {
             log_msg(LOG_WARNING, "Got SIGTERM. Exiting...");
             got_sigterm = 0;
+        }
+        else if(got_sigusr1)
+        {
+            log_msg(LOG_INFO, "Got SIGUSR1. Dumping config...");
+            rv = 0;
+            got_sigusr1 = 0;
+            dump_config(opts);
+            dump_service_list(opts);
+            dump_access_list(opts);
         }
         else
         {
@@ -646,9 +695,31 @@ static int handle_signals(fko_srv_options_t *opts)
     return rv;
 }
 
+static int signal_to_dump_config(fko_srv_options_t * const opts)
+{
+    int      res = 0;
+    pid_t    old_pid;
+
+    old_pid = get_running_pid(opts);
+
+    if(old_pid > 0)
+    {
+        res    = kill(old_pid, SIGUSR1);
+
+        if(res == 0)
+        {
+            fprintf(stdout, "Signaled to fwknopd (pid: %i) to dump config.\n", old_pid);
+            return EXIT_SUCCESS;
+        }
+    }
+
+    fprintf(stdout, "FAILED to signal fwknopd to dump config. fwknopd may not be running.\n");
+    return EXIT_FAILURE;
+}
+
 static int stop_fwknopd(fko_srv_options_t * const opts)
 {
-    int      res = 0, is_err = 0, sleep_num = 0;
+    int      res = 0, is_err = 0;
     pid_t    old_pid;
 
     old_pid = get_running_pid(opts);
@@ -667,16 +738,8 @@ static int stop_fwknopd(fko_srv_options_t * const opts)
         {
             /* give a bit of time for process shutdown and check again
             */
-            for (sleep_num = 0; sleep_num < 4; sleep_num++) {
-                is_err = kill(old_pid, 0);
-                if(is_err != 0)
-                {
-                    fprintf(stdout, "Killed fwknopd (pid=%i) via SIGTERM\n",
-                            old_pid);
-                    return EXIT_SUCCESS;
-                }
-                sleep(1);
-            }
+            sleep(1);
+            is_err = kill(old_pid, 0);
             if(is_err != 0)
             {
                 fprintf(stdout, "Killed fwknopd (pid=%i) via SIGTERM\n",
@@ -811,15 +874,18 @@ static int
 make_dir_path(const char * const run_dir)
 {
     struct stat     st;
-    int             res = 0;
+    int             res = 0, len = 0;
     char            tmp_path[MAX_PATH_LEN];
     char            *ndx;
 
     strlcpy(tmp_path, run_dir, sizeof(tmp_path));
 
+    len = strlen(tmp_path);
+
     /* Strip any trailing dir sep char.
     */
-    chop_char(tmp_path, PATH_SEP);
+    if(tmp_path[len-1] == PATH_SEP)
+        tmp_path[len-1] = '\0';
 
     for(ndx = tmp_path+1; *ndx; ndx++)
     {
@@ -1019,35 +1085,46 @@ get_running_pid(const fko_srv_options_t *opts)
     char    buf[PID_BUFLEN] = {0};
     pid_t   rpid            = 0;
 
-
+    log_msg(LOG_DEBUG, "get_running_pid: checking file perms...");
     if(verify_file_perms_ownership(opts->config[CONF_FWKNOP_PID_FILE]) != 1)
     {
         fprintf(stderr, "verify_file_perms_ownership() error\n");
         return(rpid);
     }
 
+    log_msg(LOG_DEBUG, "get_running_pid: opening the file...");
     op_fd = open(opts->config[CONF_FWKNOP_PID_FILE], O_RDONLY);
 
     if(op_fd == -1)
     {
+        log_msg(LOG_DEBUG, "get_running_pid: error opening the file.");
         if((opts->foreground != 0) && (opts->verbose != 0))
             perror("Error trying to open PID file: ");
         return(rpid);
     }
 
+    log_msg(LOG_DEBUG, "get_running_pid: reading the file...");
     bytes_read = read(op_fd, buf, PID_BUFLEN);
     if (bytes_read > 0)
     {
         buf[PID_BUFLEN-1] = '\0';
+
+        log_msg(LOG_DEBUG, "get_running_pid: Got following string from the PID file: %s\n",
+                buf);
         /* max pid value is configurable on Linux
         */
         rpid = (pid_t) strtol_wrapper(buf, 0, (2 << 30),
                 NO_EXIT_UPON_ERR, &is_err);
         if(is_err != FKO_SUCCESS)
             rpid = 0;
+
+        log_msg(LOG_DEBUG, "get_running_pid: Returning PID value: %d\n",
+                rpid);
     }
     else if (bytes_read < 0)
+    {
         perror("Error trying to read() PID file: ");
+    }
 
     close(op_fd);
 

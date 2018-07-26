@@ -113,7 +113,7 @@ Using libfko
 
 SPA Parameter Types
 
-* Digests::                       The message digest hashes supported by libfko
+* Digests::                       The message digest hashes supported by libfko 
 * SPA Messages::                  The fko @acronym{SPA} message types
                                   supported by libfko (and fwknop)
 * Encryption Algorithms::         Encryption schemes supported by libfko
@@ -130,7 +130,7 @@ SPA Parameter Types
 @cindex Single Packet Authorization, intro
 
 The ``Firewall Knock Operator Library'' (libfko) is a C language library that
-implements the functions needed to create and/or parse
+implements the functions needed to create and/or parse 
 @dfn{Single Packet Authorization} (@acronym{SPA}) data.  It is designed to
 abstract the details of encoding, encryption, decoding, parsing, and verifying
 @acronym{SPA} messages such as those used by Michael Rash's @dfn{Firewall
@@ -155,7 +155,7 @@ programs.
 @sp 1
 @noindent
 For more information on fwknop and @acronym{SPA}, go to
-@uref{http://www.cipherdyne.org/fwknop}.
+@uref{http://www.cipherdyne.org/fwknop}. 
 
 @menu
 * Getting Started::               Purpose of the manual, and how to use it
@@ -185,7 +185,7 @@ creating or parsing @acronym{SPA} data.  Additional advantages include:
 @table @asis
 @item It's free software
 Anybody can use, modify, and redistribute it under the terms of the GNU
-General Public License v2 or any later version (@pxref{Library Copying}).
+General Public License (@pxref{Library Copying}).
 
 @item It's lightweight
 The Perl-based implementation requires several additional Perl
@@ -425,7 +425,7 @@ for this type is: @samp{<ip of requestor>,<command text>}.
 @item FKO_ACCESS_MSG
 A basic access request.  This is the most common type in use. The format
 for this type is: @samp{<ip of requestor>,<protocol>/<port>}.  Note that
-multiple protocol/port entries are allowed.
+mulitple protocol/port entries are allowed.
 @example
 "192.168.1.2,tcp/22"
 "192.168.1.2,tcp/22,udp/5005"
@@ -449,7 +449,7 @@ server.  The timeout value is provided via the @code{client_timeout} data
 field.
 
 @item FKO_LOCAL_NAT_ACCESS_MSG
-This is similar to the FKO_NAT_ACCESS request except the @acronym{NAT} is
+This is similar to the FKO_NAT_ACCESS request exept the @acronym{NAT} is
 to the local to the server (i.e. a service listening on 127.0.0.1).
 
 @item FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCESS_MSG
@@ -521,7 +521,7 @@ fields that have a default value.
 
 This chapter provides the ``howto'' for using libfko, including required
 functions and parameter choices.  In some sections, code samples are provided
-to further illustrate usage.
+to further illustrate usage.  
 
 @menu
 * Creating Contexts::             Creating a new fko context
@@ -963,7 +963,7 @@ use this function.  However, some may find a reason to do it in this way.
 
 @deftypefun int fko_set_gpg_recipient (fko_ctx_t @var{ctx}, const char @var{recipient});
 Sets the @acronym{GPG} key for the recipient.  This would be the recipient's
-public key used to encyrpt the @acronym{SPA} data.  You can use the user name
+public key used to encyrpt the @acronym{SPA} data.  You can use the user name 
 ("recip@@the.dest.com") or the key ID ("5EXXXXCC").  At present, multiple
 recipients are not supported.
 @end deftypefun
@@ -1213,7 +1213,7 @@ will be NULL if the context value was not previously set.
 This section describes the functions not covered elsewhere in this
 manual.  These are utility functions that operate on the data in the fko
 context.  All but @code{fko_spa_data_final} are called by other functions
-and are not normally explicitly called by the user.  However, they can
+and are not normally explictly called by the user.  However, they can
 be, so they are listed here.
 
 All of these functions return an integer representing the return status of
@@ -1243,7 +1243,7 @@ called directly as it is called from @code{fko_spa_data_final}.
 @end deftypefun
 
 @deftypefun int fko_decode_spa_data (fko_ctx_t @var{ctx});
-This function performs the decoding, parsing, validation of the @acronym{SPA}
+This function performs the decoding, parsing, validation of the @acronym{SPA} 
 data that was just decrypted. It is normally not called directly as it is
 called from @code{fko_decrypt_spa_data} (which is in turn called from
 @code{fko_new_with_data} if a password is supplied to it).
@@ -1289,7 +1289,7 @@ for the given error code.
 
 @deftypefun {const char *} fko_errstr (int @var{err_code})
 The function @code{fko_errstr} returns a pointer to a statically
-allocated string containing the description of the error.
+allocated string containing the descripton of the error.
 @end deftypefun
 
 @noindent
@@ -1467,9 +1467,9 @@ Invalid data: missing user data
 @item FKO_ERROR_INVALID_DATA_USER_FIRSTCHAR_VALIDFAIL
 Invalid data: user first char not valid
 @item FKO_ERROR_INVALID_DATA_USER_REMCHAR_VALIDFAIL
-Invalid data: user remchar not valid
+Invalid data: user remchar not valid 
 @item FKO_ERROR_INVALID_DATA_UTIL_STRTOL_LT_MIN
-Invalid data: util conversion to long less than minimum
+Invalid data: util conversion to long less than minimum 
 @item FKO_ERROR_INVALID_DATA_UTIL_STRTOL_GT_MAX
 Invalid data: util conversion to long greater than maximum
 @item FKO_ERROR_DATA_TOO_LARGE
@@ -1548,7 +1548,7 @@ Error from signer keylist start operation
 @item FKO_ERROR_GPGME_SIGNER_KEY_NOT_FOUND
 The key for the given signer was not found
 @item FKO_ERROR_GPGME_SIGNER_KEY_AMBIGUOUS
-Ambiguous name/id for the signer key (multiple matches)
+Ambiguous name/id for the signer key (mulitple matches)
 @item FKO_ERROR_GPGME_ADD_SIGNER
 Error adding the signer key to the gpgme context
 @item FKO_ERROR_GPGME_CONTEXT_RECIPIENT_KEY
@@ -1558,7 +1558,7 @@ Error from signer keylist start operation
 @item FKO_ERROR_GPGME_RECIPIENT_KEY_NOT_FOUND
 The key for the given recipient was not found
 @item FKO_ERROR_GPGME_RECIPIENT_KEY_AMBIGUOUS
-Ambiguous name/id for the recipient key (multiple matches)
+Ambiguous name/id for the recipient key (mulitple matches)
 @item FKO_ERROR_GPGME_DECRYPT_FAILED
 Decryption operation failed
 @item FKO_ERROR_GPGME_BAD_GPG_EXE
@@ -1586,7 +1586,7 @@ Invalid data: encrypt: GPG cipher failed
 @item FKO_ERROR_INVALID_DATA_ENCRYPT_GPG_ENCODEDMSG_NULL
 Invalid data: encrypt: GPG-encoded message is NULL
 @item FKO_ERROR_INVALID_DATA_ENCRYPT_GPG_ENCODEDMSGLEN_VALIDFAIL
-Invalid data: encrypt: invalid GPG-encrypted message length
+Invalid data: encrypt: invalid GPG-encrypted message length 
 @end table
 @end deftypevar
 
@@ -1599,7 +1599,7 @@ using the following function:
 
 @deftypefun {const char *} fko_gpg_errstr (int @var{err_code})
 The function @code{fko_errstr} returns a pointer to a statically
-allocated string containing the description of the @acronym{GPGME} error.
+allocated string containing the descripton of the @acronym{GPGME} error.
 @end deftypefun
 
 @noindent

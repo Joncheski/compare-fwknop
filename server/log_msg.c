@@ -1,12 +1,13 @@
-/**
- * \file server/log_msg.c
+/*
+ *****************************************************************************
  *
- * \brief General logging routine that can write to syslog and/or stderr
+ * File:    log_msg.c
+ *
+ * Purpose: General logging routine that can write to syslog and/or stderr
  *          and can take varibale number of args.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -150,8 +151,8 @@ init_logging(fko_srv_options_t *opts) {
     verbosity = LOG_DEFAULT_VERBOSITY + opts->verbose;
 }
 
-/* Syslog message function.  It uses default set at initialization, and also
- * takes variable args to accommodate printf-like formatting and expansion.
+/* Syslog message function.  It uses default set at intialization, and also
+ * takes variable args to accomodate printf-like formatting and expansion.
 */
 void
 log_msg(int level, char* msg, ...)

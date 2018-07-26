@@ -1,11 +1,12 @@
-/**
- * \file client/utils.h
+/*
+ *****************************************************************************
  *
- * \brief Header file for utils.c client test program.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    utils.h
+ *
+ * Purpose: Header file for utils.c client test program.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -52,10 +53,14 @@
 
 /* Prototypes
 */
+void    hex_dump(const unsigned char *data, const int size);
+int     set_file_perms(const char *file);
 int     verify_file_perms_ownership(const char *file);
 int     resolve_dst_addr(const char *dns_str, struct addrinfo *hints,
             char *ip_str, size_t ip_bufsize, fko_cli_options_t *opts);
 short   proto_inttostr(int proto, char *proto_str, size_t proto_size);
 short   proto_strtoint(const char *pr_str);
+int     strtoargv(char *args_str, char **argv_new, int *argc_new, fko_cli_options_t *opts);
+void    free_argv(char **argv_new, int *argc_new);
 
 #endif  /* UTILS_H */

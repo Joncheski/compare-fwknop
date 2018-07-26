@@ -1,11 +1,12 @@
-/**
- * \file client/spa_comm.c
+/*
+ *****************************************************************************
  *
- * \brief Network-related functions for the fwknop client
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    spa_comm.c
+ *
+ * Purpose: Network-related functions for the fwknop client
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -98,7 +99,7 @@ send_spa_packet_tcp_or_udp(const char *spa_data, const int sd_len,
 
     memset(&hints, 0, sizeof(struct addrinfo));
 
-    hints.ai_family   = AF_INET; /* Allow IPv4 only */
+    hints.ai_family   = AF_UNSPEC; /* Allow IPv4 or IPv6 */
 
     if (options->spa_proto == FKO_PROTO_UDP)
     {
@@ -170,7 +171,7 @@ send_spa_packet_tcp_or_udp(const char *spa_data, const int sd_len,
 
     if (! sock_success) {
         log_msg(LOG_VERBOSITY_ERROR,
-                "send_spa_packet_tcp_or_udp: Could not create socket: %s",
+                "send_spa_packet_tcp_or_udp: Could not create socket: ",
                 strerror(errno));
         return -1;
     }
@@ -556,13 +557,13 @@ send_spa_packet_http(const char *spa_data, const int sd_len,
     else /* we are sending the SPA packet through an HTTP proxy */
     {
         /* Extract the hostname if it was specified as a URL. Actually,
-         * we just move the start of the hostname to the beginning of the
+         * we just move the start of the hostname to the begining of the
          * original string.
         */
         if(strncasecmp(ndx, "http://", 7) == 0)
             memmove(ndx, ndx+7, strlen(ndx)+1);
 
-        /* If there is a colon assume the proxy hostname or IP is on the left
+        /* If there is a colon assume the proxy hostame or IP is on the left
          * and the proxy port is on the right. So we make the : a \0 and
          * extract the port value.
         */
@@ -622,7 +623,7 @@ send_spa_packet(fko_ctx_t ctx, fko_cli_options_t *options)
     int                 res, sd_len;
     char               *spa_data;
     struct sockaddr_in  saddr, daddr;
-    char                ip_str[INET_ADDRSTRLEN] = {0};  /* String used to contain the ip address of an hostname */
+    char                ip_str[INET_ADDRSTRLEN] = {0};  /* String used to contain the ip addres of an hostname */
     struct addrinfo     hints;                          /* Structure used to set hints to resolve hostname */
 #ifdef WIN32
     WSADATA wsa_data;

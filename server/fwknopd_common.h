@@ -1,11 +1,12 @@
-/**
- * \file server/fwknopd_common.h
+/*
+ ******************************************************************************
  *
- * \brief Header file for fwknopd source files.
- */
-
-/*  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
- *  Copyright (C) 2009-2015 fwknop developers and contributors. For a full
+ * File:    fwknopd_common.h
+ *
+ * Purpose: Header file for fwknopd source files.
+ *
+ *  Fwknop is developed primarily by the people listed in the file 'AUTHORS'.
+ *  Copyright (C) 2009-2014 fwknop developers and contributors. For a full
  *  list of contributors, see the file 'CREDITS'.
  *
  *  License (GNU General Public License):
@@ -31,6 +32,9 @@
 #define FWKNOPD_COMMON_H
 
 #include "common.h"
+#include "hash_table.h"
+#include "sdp_ctrl_client.h"
+#include <pthread.h>
 
 #if PLATFORM_OPENBSD
   #include <netinet/in.h>
@@ -64,6 +68,8 @@
 
 #define DEF_CONFIG_FILE     DEF_CONF_DIR"/"MY_NAME".conf"
 #define DEF_ACCESS_FILE     DEF_CONF_DIR"/access.conf"
+#define DEF_CONN_ID_FILE    DEF_CONF_DIR"/last_conn_id.conf"
+#define DEF_CONN_REPORT_INTERVAL   "30"
 
 #ifndef DEF_RUN_DIR
   /* Our default run directory is based on LOCALSTATEDIR as set by the
@@ -94,9 +100,6 @@
 #define DEF_RULES_CHECK_THRESHOLD       "20"
 #define DEF_MAX_SNIFF_BYTES             "1500"
 #define DEF_GPG_HOME_DIR                "/root/.gnupg"
-#define DEF_ENABLE_X_FORWARDED_FOR      "N"
-#define DEF_ENABLE_RULE_PREPEND         "N"
-#define DEF_ENABLE_NAT_DNS              "Y"
 #ifdef  GPG_EXE
   #define DEF_GPG_EXE                   GPG_EXE
 #else
@@ -115,24 +118,19 @@
 #else
   #define DEF_ENABLE_UDP_SERVER           "Y"
 #endif
-#if USE_LIBNETFILTER_QUEUE
-  #define DEF_ENABLE_NFQ_CAPTURE          "N"
-  #define DEF_NFQ_INTERFACE               ""
-  #define DEF_NFQ_PORT                    "62201"
-  #define DEF_NFQ_TABLE                   "mangle"
-  #define DEF_NFQ_CHAIN                   "FWKNOP_NFQ"
-  #define DEF_NFQ_QUEUE_NUMBER            "1"
-  #define DEF_CONF_NFQ_LOOP_SLEEP         "500000" /* half a second (in microseconds) */
-
-#endif
 #define DEF_UDPSERV_PORT                "62201"
 #define DEF_UDPSERV_SELECT_TIMEOUT      "500000" /* half a second (in microseconds) */
 #define DEF_SYSLOG_IDENTITY             MY_NAME
 #define DEF_SYSLOG_FACILITY             "LOG_DAEMON"
 #define DEF_ENABLE_DESTINATION_RULE     "N"
+#define DEF_DISABLE_SDP_MODE            "N"
+#define DEF_ALLOW_LEGACY_ACCESS_REQUESTS "N"
+#define DEF_DISABLE_SDP_CTRL_CLIENT     "N"
+#define DEF_DISABLE_CONNECTION_TRACKING "N"
+#define DEF_MAX_WAIT_ACC_DATA           "30"
+
 
 #define DEF_FW_ACCESS_TIMEOUT           30
-#define DEF_MAX_FW_TIMEOUT              300
 
 /* For integer variable range checking
 */
@@ -147,6 +145,16 @@
 #define RCHK_MAX_CMD_CYCLE_TIMER        (2 << 22) /* seconds */
 #define RCHK_MIN_CMD_CYCLE_TIMER        1
 #define RCHK_MAX_RULES_CHECK_THRESHOLD  ((2 << 16) - 1)
+#define RCHK_MAX_WAIT_ACC_DATA          60
+
+#define MIN_ACC_STANZA_HASH_TABLE_LENGTH  10
+#define MAX_ACC_STANZA_HASH_TABLE_LENGTH  10000
+#define DEF_ACC_HASH_TABLE_LENGTH             100
+#define DEF_ACC_HASH_TABLE_LENGTH_STR         "100"
+#define MIN_SERVICE_HASH_TABLE_LENGTH     10
+#define MAX_SERVICE_HASH_TABLE_LENGTH     10000
+#define DEF_SERVICE_HASH_TABLE_LENGTH_STR         "20"
+
 
 /* FirewallD-specific defines
 */
@@ -224,11 +232,13 @@
 #define MAX_PCAP_FILTER_LEN     1024
 #define MAX_IFNAME_LEN          128
 #define MAX_SPA_PACKET_LEN      1500 /* --DSS check this? */
+#define MAX_HOSTNAME_LEN        64
 #define MAX_DECRYPTED_SPA_LEN   1024
+#define MAX_SDP_ID_STR_LEN 11
 
 /* The minimum possible valid SPA data size.
 */
-#define MIN_SPA_DATA_SIZE   140
+#define MIN_SPA_DATA_SIZE   80
 
 /* Configuration file parameter tags.
  * This will correspond to entries in the configuration parameters
@@ -262,15 +272,6 @@ enum {
     CONF_ENABLE_UDP_SERVER,
     CONF_UDPSERV_PORT,
     CONF_UDPSERV_SELECT_TIMEOUT,
-#if USE_LIBNETFILTER_QUEUE
-    CONF_ENABLE_NFQ_CAPTURE,
-    CONF_NFQ_INTERFACE,
-    CONF_NFQ_PORT,
-    CONF_NFQ_TABLE,
-    CONF_NFQ_CHAIN,
-    CONF_NFQ_QUEUE_NUMBER,
-    CONF_NFQ_LOOP_SLEEP,
-#endif
     CONF_LOCALE,
     CONF_SYSLOG_IDENTITY,
     CONF_SYSLOG_FACILITY,
@@ -281,10 +282,7 @@ enum {
     //CONF_EXTERNAL_CMD_ALARM,
     //CONF_ENABLE_EXT_CMD_PREFIX,
     //CONF_EXT_CMD_PREFIX,
-    CONF_ENABLE_X_FORWARDED_FOR,
     CONF_ENABLE_DESTINATION_RULE,
-    CONF_ENABLE_RULE_PREPEND,
-    CONF_ENABLE_NAT_DNS,
 #if FIREWALL_FIREWALLD
     CONF_ENABLE_FIREWD_FORWARDING,
     CONF_ENABLE_FIREWD_LOCAL_NAT,
@@ -333,7 +331,6 @@ enum {
     CONF_FWKNOP_RUN_DIR,
     CONF_FWKNOP_CONF_DIR,
     CONF_ACCESS_FILE,
-    CONF_ACCESS_FOLDER,
     CONF_FWKNOP_PID_FILE,
 #if USE_FILE_CACHE
     CONF_DIGEST_FILE,
@@ -349,6 +346,18 @@ enum {
     CONF_AFL_PKT_FILE,
 #endif
     CONF_FAULT_INJECTION_TAG,
+    CONF_DISABLE_SDP_MODE,
+    CONF_ALLOW_LEGACY_ACCESS_REQUESTS,
+    CONF_ACC_STANZA_HASH_TABLE_LENGTH,
+    CONF_SERVICE_HASH_TABLE_LENGTH,
+    CONF_DISABLE_SDP_CTRL_CLIENT,
+    CONF_DISABLE_CONNECTION_TRACKING,
+    CONF_CONN_ID_FILE,
+    CONF_CONN_REPORT_INTERVAL,
+    CONF_MAX_WAIT_ACC_DATA,
+    CONF_SDP_CTRL_CLIENT_CONF,
+    CONF_FWKNOP_CLIENT_CONF,
+    CONF_CONFIG_DUMP_OUTPUT_PATH,
 
     NUMBER_OF_CONFIG_ENTRIES  /* Marks the end and number of entries */
 };
@@ -382,10 +391,21 @@ typedef struct acc_string_list
     struct acc_string_list  *next;
 } acc_string_list_t;
 
+/* A list of service IDs that a client has access to
+ */
+typedef struct acc_service_list
+{
+    uint32_t             service_id;
+    struct acc_service_list *next;
+} acc_service_list_t;
+
 /* Access stanza list struct.
 */
 typedef struct acc_stanza
 {
+    uint32_t             sdp_id;
+    char                *service_list_str;
+    acc_service_list_t  *service_list;
     char                *source;
     acc_int_list_t      *source_list;
     char                *destination;
@@ -403,7 +423,6 @@ typedef struct acc_stanza
     int                  hmac_type;
     unsigned char        use_rijndael;
     int                  fw_access_timeout;
-    int                  max_fw_timeout;
     unsigned char        enable_cmd_exec;
     unsigned char        enable_cmd_sudo_exec;
     char                *cmd_sudo_exec_user;
@@ -594,6 +613,24 @@ typedef struct cmd_cycle_list
 
 #endif /* FIREWALL type */
 
+
+typedef struct service_data
+{
+    uint32_t service_id;
+    unsigned int  proto;
+    unsigned int  port;
+    char nat_ip_str[MAX_IPV4_STR_LEN];
+    unsigned int  nat_port;
+} service_data_t;
+
+typedef struct service_data_list
+{
+    service_data_t *service_data;
+    struct service_data_list *next;
+} service_data_list_t;
+
+
+
 /* SPA Packet info struct.
 */
 typedef struct spa_pkt_info
@@ -604,6 +641,8 @@ typedef struct spa_pkt_info
     unsigned int    packet_dst_ip;
     unsigned short  packet_src_port;
     unsigned short  packet_dst_port;
+    uint32_t        sdp_id;
+    char            sdp_id_str[MAX_SDP_ID_STR_LEN];
     unsigned char   packet_data[MAX_SPA_PACKET_LEN+1];
 } spa_pkt_info_t;
 
@@ -611,14 +650,15 @@ typedef struct spa_pkt_info
 */
 typedef struct spa_data
 {
+    uint32_t        sdp_id;
     char           *username;
     time_t          timestamp;
     char           *version;
     short           message_type;
     char           *spa_message;
     char            spa_message_src_ip[MAX_IPV4_STR_LEN];
+    uint32_t        spa_message_service_id;
     char            pkt_source_ip[MAX_IPV4_STR_LEN];
-    char            pkt_source_xff_ip[MAX_IPV4_STR_LEN];
     char            pkt_destination_ip[MAX_IPV4_STR_LEN];
     char            spa_message_remain[1024]; /* --DSS FIXME: arbitrary bounds */
     char           *nat_access;
@@ -626,6 +666,7 @@ typedef struct spa_data
     unsigned int    client_timeout;
     unsigned int    fw_access_timeout;
     char            *use_src_ip;
+    service_data_list_t *service_data_list;
 } spa_data_t;
 
 /* fwknopd server configuration parameters and values
@@ -646,7 +687,6 @@ typedef struct fko_srv_options
     unsigned char   fw_flush;           /* Flush current firewall rules */
     unsigned char   key_gen;            /* Generate keys and exit */
     unsigned char   exit_after_parse_config; /* Parse config and exit */
-    unsigned char   exit_parse_digest_cache; /* Parse digest cache and exit */
 
     /* Operational flags
     */
@@ -654,7 +694,6 @@ typedef struct fko_srv_options
     unsigned char   afl_fuzzing;        /* SPA pkts from stdin for AFL fuzzing */
     unsigned char   verbose;            /* Verbose mode flag */
     unsigned char   enable_udp_server;  /* Enable UDP server mode */
-    unsigned char   enable_nfq_capture; /* Enable Netfilter Queue capture mode */
     unsigned char   enable_fw;          /* Command modes by themselves don't
                                            need firewall support. */
 
@@ -696,19 +735,18 @@ typedef struct fko_srv_options
     */
     char           *config[NUMBER_OF_CONFIG_ENTRIES];
 
-    /* Data elements that are derived from configuration entries - avoids
-     * calling strtol_wrapper() after the config is parsed.
-    */
-    unsigned short tcpserv_port;
-    unsigned short udpserv_port;
-    int            udpserv_select_timeout;
-    int            rules_chk_threshold;
-    int            pcap_loop_sleep;
-    int            pcap_dispatch_count;
-    int            max_sniff_bytes;
-    int            max_spa_packet_age;
+    acc_stanza_t   *acc_stanzas;       /* List of access stanzas for legacy mode */
+    hash_table_t   *acc_stanza_hash_tbl;  /* List of access stanzas for sdp mode */
+    pthread_mutex_t acc_hash_tbl_mutex;
 
-    acc_stanza_t   *acc_stanzas;       /* List of access stanzas */
+    hash_table_t   *service_hash_tbl;
+    pthread_mutex_t service_hash_tbl_mutex;
+    hash_table_t   *reverse_service_hash_tbl;
+
+    /* The SDP Control Client
+     */
+    sdp_ctrl_client_t ctrl_client;
+    pthread_t ctrl_client_thread;
 
     /* Firewall config info.
     */
@@ -734,15 +772,6 @@ typedef struct fko_srv_options
 */
 #define FW_CLEANUP          1
 #define NO_FW_CLEANUP       0
-
-/**
- * \brief Frees all memory and exits
- *
- * \param opts Program options
- * \param fw_cleanup_flag Flag indicates whether firewall needs cleanup
- * \param exit_status Exit status to return when closing the program
- *
- */
 void clean_exit(fko_srv_options_t *opts,
         unsigned int fw_cleanup_flag, unsigned int exit_status);
 
