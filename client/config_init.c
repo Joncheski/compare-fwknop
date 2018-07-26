@@ -36,6 +36,7 @@
 #include "utils.h"
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <inttypes.h>
 
 #ifdef WIN32
   #define STDIN_FILENO 0
@@ -124,6 +125,7 @@ enum
     FWKNOP_CLI_ARG_NAT_ACCESS,
     FWKNOP_CLI_ARG_HTTP_USER_AGENT,
     FWKNOP_CLI_ARG_RESOLVE_URL,
+    FWKNOP_CLI_ARG_SERVER_RESOLVE_IPV4,
     FWKNOP_CLI_ARG_NAT_LOCAL,
     FWKNOP_CLI_ARG_NAT_RAND_PORT,
     FWKNOP_CLI_ARG_NAT_PORT,
@@ -133,6 +135,11 @@ enum
     FWKNOP_CLI_ARG_RESOLVE_HTTP_ONLY,
     FWKNOP_CLI_ARG_WGET_CMD,
     FWKNOP_CLI_ARG_NO_SAVE_ARGS,
+    FWKNOP_CLI_ARG_DISABLE_SDP_MODE,
+    FWKNOP_CLI_ARG_SDP_ID,
+    FWKNOP_CLI_ARG_SERVICE_IDS,
+    FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT,
+    FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF,
     FWKNOP_CLI_LAST_ARG
 } fwknop_cli_arg_t;
 
@@ -172,6 +179,7 @@ static fko_var_t fko_var_array[FWKNOP_CLI_LAST_ARG] =
     { "NAT_ACCESS",            FWKNOP_CLI_ARG_NAT_ACCESS            },
     { "HTTP_USER_AGENT",       FWKNOP_CLI_ARG_HTTP_USER_AGENT       },
     { "RESOLVE_URL",           FWKNOP_CLI_ARG_RESOLVE_URL           },
+    { "SERVER_RESOLVE_IPV4",   FWKNOP_CLI_ARG_SERVER_RESOLVE_IPV4   },
     { "NAT_LOCAL",             FWKNOP_CLI_ARG_NAT_LOCAL             },
     { "NAT_RAND_PORT",         FWKNOP_CLI_ARG_NAT_RAND_PORT         },
     { "NAT_PORT",              FWKNOP_CLI_ARG_NAT_PORT              },
@@ -180,7 +188,13 @@ static fko_var_t fko_var_array[FWKNOP_CLI_LAST_ARG] =
     { "RESOLVE_IP_HTTPS",      FWKNOP_CLI_ARG_RESOLVE_IP_HTTPS      },
     { "RESOLVE_HTTP_ONLY",     FWKNOP_CLI_ARG_RESOLVE_HTTP_ONLY     },
     { "WGET_CMD",              FWKNOP_CLI_ARG_WGET_CMD              },
-    { "NO_SAVE_ARGS",          FWKNOP_CLI_ARG_NO_SAVE_ARGS          }
+    { "NO_SAVE_ARGS",          FWKNOP_CLI_ARG_NO_SAVE_ARGS          },
+    { "DISABLE_SDP_MODE",      FWKNOP_CLI_ARG_DISABLE_SDP_MODE      },
+    { "SDP_ID",            FWKNOP_CLI_ARG_SDP_ID         },
+    { "SERVICE_IDS",            FWKNOP_CLI_ARG_SERVICE_IDS           },
+    { "DISABLE_CTRL_CLIENT",   FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT},
+    { "SDP_CTRL_CLIENT_CONF",  FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF  }
+
 };
 
 /* Array to define which conf. variables are critical and should not be
@@ -289,7 +303,8 @@ add_var_to_bitmask(short var_pos, fko_var_bitmask_t *bm)
 
     /* The index on the uint32_t bitmask is invalid */
     else
-        log_msg(LOG_VERBOSITY_WARNING, "add_var_to_bitmask() : Bad variable position %u", var_pos);
+        log_msg(LOG_VERBOSITY_WARNING,
+                "add_var_to_bitmask() : Bad variable position %u", var_pos);
 }
 
 /**
@@ -315,7 +330,8 @@ remove_var_from_bitmask(short var_pos, fko_var_bitmask_t *bm)
 
     /* The index on the uint32_t bitmask is invalid */
     else
-        log_msg(LOG_VERBOSITY_WARNING, "remove_from_bitmask() : Bad variable position %u", var_pos);
+        log_msg(LOG_VERBOSITY_WARNING,
+                "remove_from_bitmask() : Bad variable position %u", var_pos);
 }
 
 /**
@@ -676,6 +692,9 @@ set_rc_file(char *rcfile, fko_cli_options_t *options)
 
         rcfile[rcf_offset] = PATH_SEP;
         strlcat(rcfile, ".fwknoprc", MAX_PATH_LEN);
+
+        // since the field is not set in options, copy it for later use
+        strlcpy(options->rc_file, rcfile, MAX_PATH_LEN);
     }
     else
     {
@@ -872,16 +891,27 @@ create_fwknoprc(const char *rcfile)
         "# User-provided named stanzas:\n"
         "\n"
         "# Example for a destination server of 192.168.1.20 to open access to\n"
-        "# SSH for an IP that is resolved externally, and one with a NAT request\n"
-        "# for a specific source IP that maps port 8088 on the server\n"
-        "# to port 88 on 192.168.1.55 with timeout.\n"
+        "# SSH (service ID 123) for an IP that is resolved externally, a second\n"
+        "# example for a NAT request with timeout (service ID 456, client is\n"
+        "# actually unaware that NAT is involved), and one legacy NAT request\n"
+        "# for a specific source IP that maps port 8088 on the server to port\n"
+        "# 88 on 192.168.1.55 with timeout.\n"
         "#\n"
         "#[myssh]\n"
+        "#SDP_ID       12345\n"
         "#SPA_SERVER          192.168.1.20\n"
-        "#ACCESS              tcp/22\n"
+        "#SERVICE_IDS         123\n"
         "#ALLOW_IP            resolve\n"
         "#\n"
         "#[mynatreq]\n"
+        "#SDP_ID       12345\n"
+        "#SPA_SERVER          192.168.1.20\n"
+        "#SERVICE_IDS         456\n"
+        "#ALLOW_IP            10.21.2.6\n"
+        "#CLIENT_TIMEOUT      60\n"
+        "#\n"
+        "#[mynatreq_legacy]\n"
+        "#SDP_ID       12345\n"
         "#SPA_SERVER          192.168.1.20\n"
         "#ACCESS              tcp/8088\n"
         "#ALLOW_IP            10.21.2.6\n"
@@ -1195,6 +1225,14 @@ parse_rc_param(fko_cli_options_t *options, const char *var_name, char * val)
         }
         strlcpy(options->resolve_url, val, tmpint);
     }
+    /* Resolve the SPA server (via DNS) - accept IPv4 addresses only ? */
+    else if (var->pos == FWKNOP_CLI_ARG_SERVER_RESOLVE_IPV4)
+    {
+        if (is_yes_str(val))
+        {
+            options->spa_server_resolve_ipv4 = 1;
+        }
+    }
     /* wget command */
     else if (var->pos == FWKNOP_CLI_ARG_WGET_CMD)
     {
@@ -1280,6 +1318,45 @@ parse_rc_param(fko_cli_options_t *options, const char *var_name, char * val)
             options->no_save_args = 1;
         else;
     }
+    /* SDP mode - yes or no.
+    */
+    else if (var->pos == FWKNOP_CLI_ARG_DISABLE_SDP_MODE)
+    {
+        if (is_yes_str(val))
+            options->disable_sdp_mode = 1;
+        else
+            options->disable_sdp_mode = 0;
+    }
+    /* SDP Client ID */
+    else if (var->pos == FWKNOP_CLI_ARG_SDP_ID)
+    {
+        tmpint = strtol_wrapper(val, 0, UINT32_MAX, NO_EXIT_UPON_ERR, &is_err);;
+        if(is_err == FKO_SUCCESS)
+            options->sdp_id = (uint32_t)tmpint;
+        else
+            parse_error = -1;
+    }
+    /* Service ID */
+    else if (var->pos == FWKNOP_CLI_ARG_SERVICE_IDS)
+    {
+        strlcpy(options->service_ids_str,
+                val, sizeof(options->service_ids_str));
+    }
+    /* SDP Ctrl Client Config File */
+    else if (var->pos == FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF)
+    {
+        strlcpy(options->sdp_ctrl_client_config_file,
+                val, sizeof(options->sdp_ctrl_client_config_file));
+    }
+    /* Disable SDP Ctrl Client */
+    else if (var->pos == FWKNOP_CLI_ARG_DISABLE_SDP_CTRL_CLIENT)
+    {
+        if (is_yes_str(val))
+            options->disable_sdp_ctrl_client = 1;
+        else
+            options->disable_sdp_ctrl_client = 0;
+    }
+
     /* The variable is not a configuration variable */
     else
     {
@@ -1417,6 +1494,9 @@ add_single_var_to_rc(FILE* fhandle, short var_pos, fko_cli_options_t *options)
                 strlcpy(val, options->resolve_url, sizeof(val));
             else;
             break;
+        case FWKNOP_CLI_ARG_SERVER_RESOLVE_IPV4:
+            bool_to_yesno(options->spa_server_resolve_ipv4, val, sizeof(val));
+            break;
         case FWKNOP_CLI_ARG_NAT_LOCAL :
             bool_to_yesno(options->nat_local, val, sizeof(val));
             break;
@@ -1448,13 +1528,28 @@ add_single_var_to_rc(FILE* fhandle, short var_pos, fko_cli_options_t *options)
         case FWKNOP_CLI_ARG_NO_SAVE_ARGS :
             bool_to_yesno(options->no_save_args, val, sizeof(val));
             break;
+        case FWKNOP_CLI_ARG_DISABLE_SDP_MODE:
+            bool_to_yesno( (int)(options->disable_sdp_mode), val, sizeof(val));
+            break;
+        case FWKNOP_CLI_ARG_SDP_ID:
+            snprintf(val, sizeof(val)-1, "%"PRIu32, options->sdp_id);
+            break;
+        case FWKNOP_CLI_ARG_SERVICE_IDS:
+            strlcpy(val, options->service_ids_str, sizeof(val));
+            break;
+        case FWKNOP_CLI_ARG_SDP_CTRL_CLIENT_CONF:
+            strlcpy(val, options->sdp_ctrl_client_config_file, sizeof(val));
+            break;
         default:
-            log_msg(LOG_VERBOSITY_WARNING, "Warning from add_single_var_to_rc() : Bad variable position %u", var->pos);
+            log_msg(LOG_VERBOSITY_WARNING,
+                    "Warning from add_single_var_to_rc() : Bad variable position %u",
+                    var->pos);
             return;
     }
 
-    log_msg(LOG_VERBOSITY_DEBUG, "add_single_var_to_rc() : Updating param (%u) %s to %s",
-                var->pos, var->name, val);
+    log_msg(LOG_VERBOSITY_DEBUG,
+            "add_single_var_to_rc() : Updating param (%u) %s to %s",
+            var->pos, var->name, val);
 
     fprintf(fhandle, RC_PARAM_TEMPLATE, var->name, val);
 }
@@ -1654,7 +1749,11 @@ update_rc(fko_cli_options_t *options, fko_var_bitmask_t *bitmask)
          * first character.
         */
         if(IS_EMPTY_LINE(line[0]))
+        {
+            /* Add the line to the new rcfile */
+            fprintf(rc_update, "%s", line);
             continue;
+        }
 
         /* If we find a section... */
         if(is_rc_section(line, strlen(line), curr_stanza, sizeof(curr_stanza)) == 1)
@@ -1830,6 +1929,18 @@ validate_options(fko_cli_options_t *options)
                     "[-] WARNING: Should use -a or -R to harden SPA against potential MITM attacks");
             }
         }
+
+        /* If SDP mode, must have defined sdp_id
+         */
+        if(!options->disable_sdp_mode)
+        {
+            if(options->sdp_id == FKO_DEFAULT_SDP_ID)
+            {
+                log_msg(LOG_VERBOSITY_ERROR,
+                    "SDP_ID must be specified when SDP mode is enabled");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
 
     /* Make sure -a overrides IP resolution
@@ -1934,6 +2045,9 @@ set_defaults(fko_cli_options_t *options)
 
     options->input_fd       = FD_INVALID;
 
+    options->disable_sdp_mode = FKO_DEFAULT_DISABLE_SDP_MODE;
+    options->sdp_id    = FKO_DEFAULT_SDP_ID;
+
     return;
 }
 
@@ -2036,6 +2150,12 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
             case 'D':
                 strlcpy(options->spa_server_str, optarg, sizeof(options->spa_server_str));
                 add_var_to_bitmask(FWKNOP_CLI_ARG_SPA_SERVER, &var_bitmask);
+                break;
+            case DISABLE_SDP_CTRL_CLIENT:
+                options->disable_sdp_ctrl_client = 1;
+                break;
+            case DISABLE_SDP_MODE:
+                options->disable_sdp_mode = 1;
                 break;
             case 'E':
                 strlcpy(options->args_save_file, optarg, sizeof(options->args_save_file));
@@ -2266,6 +2386,18 @@ config_init(fko_cli_options_t *options, int argc, char **argv)
                 strlcpy(options->resolve_url, optarg, rlen);
                 add_var_to_bitmask(FWKNOP_CLI_ARG_RESOLVE_URL, &var_bitmask);
                 break;
+            case SDP_ID:
+                options->sdp_id = (uint32_t)strtol_wrapper(optarg, 0,
+                        UINT32_MAX, EXIT_UPON_ERR, &is_err);
+                add_var_to_bitmask(FWKNOP_CLI_ARG_SDP_ID, &var_bitmask);
+                break;
+            case SERVICE_IDS:
+                strlcpy(options->service_ids_str, optarg, sizeof(options->service_ids_str));
+                add_var_to_bitmask(FWKNOP_CLI_ARG_SERVICE_IDS, &var_bitmask);
+                break;
+            case SERVER_RESOLVE_IPV4:
+                options->spa_server_resolve_ipv4 = 1;
+                break;
             case 'w':
                 if(options->wget_bin != NULL)
                     free(options->wget_bin);
@@ -2451,6 +2583,15 @@ usage(void)
       "                             of the configuration parameters.\n"
       "                             If more arguments are set through the command\n"
       "                             line, the configuration is updated accordingly.\n"
+      "     --sdp-id                Specify this 32 bit unsigned integer to \n"
+      "                             indicate this client's SDP client ID.\n"
+      "     --disable-sdp           Turn off SDP mode to revert to the classic \n"
+      "                             SPA packet format. Even with SDP mode disabled \n"
+      "                             this client is not backwards compatible. \n"
+      "     --disable-ctrl-client   Do not connect to SDP Controller during this \n"
+      "                             run. This is effectively the same as not \n"
+      "                             setting SDP_CTRL_CLIENT_CONF in the stanza \n"
+      "                             possibly being used. \n"
       " -A, --access                Provide a list of ports/protocols to open\n"
       "                             on the server (e.g. 'tcp/22').\n"
       " -a, --allow-ip              Specify IP address to allow within the SPA\n"
@@ -2473,6 +2614,9 @@ usage(void)
       "                             icmp) for the outgoing SPA packet.\n"
       "                             Note: The 'tcpraw' and 'icmp' modes use raw\n"
       "                             sockets and thus require root access to use.\n"
+      "     --services              Tell the fwknopd server which services to open\n"
+      "                             access to by specifying service IDs rather\n"
+      "                             than specifying ports or NAT information\n"
       " -s, --source-ip             Tell the fwknopd server to accept whatever\n"
       "                             source IP the SPA packet has as the IP that\n"
       "                             needs access (not recommended, and the\n"
@@ -2563,6 +2707,8 @@ usage(void)
       "                             $HOME/fwknop.run file\n"
       "     --rc-file               Specify path to the fwknop rc file (default\n"
       "                             is $HOME/.fwknoprc)\n"
+      "     --server-resolve-ipv4   Force IPv4 address resolution from DNS for\n"
+      "                             SPA server when using a hostname.\n"
       "     --save-rc-stanza        Save command line arguments to the\n"
       "                             $HOME/.fwknoprc stanza specified with the\n"
       "                             -n option.\n"
@@ -2615,7 +2761,7 @@ DECLARE_UTEST(check_var_bitmask, "Check var_bitmask functions")
     CU_ASSERT(var_bitmask.dw[0] == 1);
     remove_var_from_bitmask(FWKNOP_CLI_FIRST_ARG, &var_bitmask);
     CU_ASSERT(bitmask_has_var(FWKNOP_CLI_FIRST_ARG, &var_bitmask) == 0);
-    CU_ASSERT(var_bitmask.dw[0] == 0);	
+    CU_ASSERT(var_bitmask.dw[0] == 0);
 
     add_var_to_bitmask(FWKNOP_CLI_ARG_KEY_RIJNDAEL, &var_bitmask);
     CU_ASSERT(bitmask_has_var(FWKNOP_CLI_ARG_KEY_RIJNDAEL, &var_bitmask) == 1);

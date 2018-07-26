@@ -53,6 +53,7 @@
 
 #define MIN_GNUPG_MSG_SIZE          400
 #define MIN_SPA_FIELDS                6
+#define MIN_SDP_SPA_FIELDS			  4
 #define MAX_SPA_FIELDS                9
 
 #define MAX_IPV4_STR_LEN             16
@@ -61,6 +62,8 @@
 #define MAX_PROTO_STR_LEN             4  /* tcp, udp, icmp for now */
 #define MAX_PORT_STR_LEN              5
 #define MAX_PORT                  65535
+
+#define MAX_SERVICE_ID_STR_LEN       11
 
 /* Misc.
 */

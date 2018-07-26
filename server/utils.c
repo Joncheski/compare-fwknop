@@ -31,6 +31,8 @@
 #include "replay_cache.h"
 #include "config_init.h"
 #include "fw_util.h"
+#include "cmd_cycle.h"
+#include "connection_tracker.h"
 
 #include <stdarg.h>
 
@@ -129,6 +131,7 @@ verify_file_perms_ownership(const char *file)
 {
 #if HAVE_STAT
     struct stat st;
+    uid_t caller_uid = 0;
 
     /* Every file that fwknopd deals with should be owned
      * by the user and permissions set to 600 (user read/write)
@@ -158,10 +161,11 @@ verify_file_perms_ownership(const char *file)
             */
         }
 
-        if(st.st_uid != getuid())
+        caller_uid = getuid();
+        if(st.st_uid != caller_uid)
         {
-            log_msg(LOG_WARNING, "[-] file: %s not owned by current effective user id",
-                file);
+            log_msg(LOG_WARNING, "[-] file: %s (owner: %llu) not owned by current effective user id: %llu",
+                file, (unsigned long long)st.st_uid, (unsigned long long)caller_uid);
             /* when we start in enforcing this instead of just warning
              * the user
             res = 0;
@@ -369,14 +373,29 @@ clean_exit(fko_srv_options_t *opts, unsigned int fw_cleanup_flag, unsigned int e
     }
 #endif
 
-    if(!opts->test && (fw_cleanup_flag == FW_CLEANUP))
+    destroy_connection_tracker(opts);
+
+    if(!opts->test && opts->enable_fw && (fw_cleanup_flag == FW_CLEANUP))
         fw_cleanup(opts);
 
 #if USE_FILE_CACHE
     free_replay_list(opts);
 #endif
 
+    if(opts->ctrl_client != NULL)
+    {
+        if(opts->ctrl_client_thread > 0)
+        {
+            pthread_cancel(opts->ctrl_client_thread);
+            pthread_join(opts->ctrl_client_thread, NULL);
+            opts->ctrl_client_thread = 0;
+        }
+
+        sdp_ctrl_client_destroy(opts->ctrl_client);
+    }
+
     free_logging();
+    free_cmd_cycle_list(opts);
     free_configs(opts);
     exit(exit_status);
 }
