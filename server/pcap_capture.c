@@ -38,6 +38,7 @@
 #include "pcap_capture.h"
 #include "process_packet.h"
 #include "fw_util.h"
+#include "cmd_cycle.h"
 #include "log_msg.h"
 #include "fwknopd_errors.h"
 #include "sig_handler.h"
@@ -262,7 +263,7 @@ pcap_capture(fko_srv_options_t *opts)
             got_sigchld = 0;
         }
 
-        if(sig_do_stop())
+        if(sig_do_stop(opts))
         {
             pcap_breakloop(pcap);
             pending_break = 1;
@@ -331,21 +332,28 @@ pcap_capture(fko_srv_options_t *opts)
         else
             pcap_errcnt = 0;
 
-        /* Check for any expired firewall rules and deal with them.
-        */
         if(!opts->test)
         {
-            if(rules_chk_threshold > 0)
+            if(opts->enable_fw)
             {
-                opts->check_rules_ctr++;
-                if ((opts->check_rules_ctr % rules_chk_threshold) == 0)
+                /* Check for any expired firewall rules and deal with them.
+                */
+                if(rules_chk_threshold > 0)
                 {
-                    chk_rm_all = 1;
-                    opts->check_rules_ctr = 0;
+                    opts->check_rules_ctr++;
+                    if ((opts->check_rules_ctr % rules_chk_threshold) == 0)
+                    {
+                        chk_rm_all = 1;
+                        opts->check_rules_ctr = 0;
+                    }
                 }
+                check_firewall_rules(opts, chk_rm_all);
+                chk_rm_all = 0;
             }
-            check_firewall_rules(opts, chk_rm_all);
-            chk_rm_all = 0;
+
+            /* See if any CMD_CYCLE_CLOSE commands need to be executed.
+            */
+            cmd_cycle_close(opts);
         }
 
 #if FIREWALL_IPFW

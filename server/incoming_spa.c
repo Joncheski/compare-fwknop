@@ -36,15 +36,20 @@
 #endif
 
 #include "incoming_spa.h"
+#include "service.h"
 #include "access.h"
 #include "extcmd.h"
+#include "cmd_cycle.h"
 #include "log_msg.h"
 #include "utils.h"
 #include "fw_util.h"
 #include "fwknopd_errors.h"
 #include "replay_cache.h"
+#include "bstrlib.h"
 
 #define CTX_DUMP_BUFSIZE            4096                /*!< Maximum size allocated to a FKO context dump */
+#define KEEP_SEARCHING 1
+#define STOP_SEARCHING 0
 
 /* Validate and in some cases preprocess/reformat the SPA data.  Return an
  * error code value if there is any indication the data is not valid spa data.
@@ -54,7 +59,10 @@ preprocess_spa_data(const fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt)
 {
 
     char    *ndx = (char *)&(spa_pkt->packet_data);
+    char    *decoded_sdp_id = NULL;
+    char    *encoded_sdp_id = NULL;
     int      i, pkt_data_len = 0;
+    uint32_t sdp_id = 0;
 
     pkt_data_len = spa_pkt->packet_data_len;
 
@@ -137,6 +145,44 @@ preprocess_spa_data(const fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt)
      * The ultimate test will be whether the SPA data authenticates via an
      * HMAC anyway.
     */
+
+    /* If this is SDP mode
+     */
+    if(strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "N", 1) == 0)
+    {
+        // make space for the decoded string, really need 5 bytes, but 8 will work
+        decoded_sdp_id = calloc(1, FKO_SDP_ID_SIZE*2);
+        if(decoded_sdp_id == NULL)
+            return(FKO_ERROR_MEMORY_ALLOCATION);
+
+        // Copy out the SDP client ID, NOT extracting yet
+        encoded_sdp_id = strndup((char *)(spa_pkt->packet_data), B64_SDP_ID_STR_LEN);
+
+        // decode from b64 to original data
+        if(1 > fko_base64_decode(encoded_sdp_id, (unsigned char*)decoded_sdp_id))
+        {
+            // decode returned error or at least a zero-length string
+            free(encoded_sdp_id);
+            free(decoded_sdp_id);
+            return(SPA_MSG_NOT_SPA_DATA);
+        }
+        free(encoded_sdp_id);
+
+        // copy to a proper uint32_t
+        memcpy((void*)(&sdp_id), decoded_sdp_id, FKO_SDP_ID_SIZE);
+        if(sdp_id == 0)
+        {
+            // client ID must not be zero
+            free(decoded_sdp_id);
+            return(SPA_MSG_NOT_SPA_DATA);
+        }
+        spa_pkt->sdp_id = sdp_id;
+        free(decoded_sdp_id);
+
+        // make a string version too
+        snprintf(spa_pkt->sdp_id_str, MAX_SDP_ID_STR_LEN, "%"PRIu32, sdp_id);
+    }
+
     return(FKO_SUCCESS);
 }
 
@@ -154,7 +200,7 @@ get_raw_digest(char **digest, char *pkt_data)
      * we can get the outer message digest
     */
     res = fko_new_with_data(&ctx, (char *)pkt_data, NULL, 0,
-            FKO_DEFAULT_ENC_MODE, NULL, 0, 0);
+            FKO_DEFAULT_ENC_MODE, NULL, 0, 0, 0);
 
     if(res != FKO_SUCCESS)
     {
@@ -233,16 +279,25 @@ static int
 get_spa_data_fields(fko_ctx_t ctx, spa_data_t *spdat)
 {
     int res = FKO_SUCCESS;
+    uint16_t disable_sdp_mode = 0;
+
+    res = fko_get_disable_sdp_mode(ctx, &disable_sdp_mode);
+    if(res != FKO_SUCCESS)
+        return(res);
+
+    res = fko_get_sdp_id(ctx, &(spdat->sdp_id));
+    if(res != FKO_SUCCESS)
+        return(res);
 
     res = fko_get_username(ctx, &(spdat->username));
     if(res != FKO_SUCCESS)
         return(res);
 
-    res = fko_get_timestamp(ctx, &(spdat->timestamp));
+    res = fko_get_version(ctx, &(spdat->version));
     if(res != FKO_SUCCESS)
         return(res);
 
-    res = fko_get_version(ctx, &(spdat->version));
+    res = fko_get_timestamp(ctx, &(spdat->timestamp));
     if(res != FKO_SUCCESS)
         return(res);
 
@@ -320,57 +375,91 @@ check_stanza_expiration(acc_stanza_t *acc, spa_data_t *spadat,
  * source IP
 */
 static int
-is_src_match(acc_stanza_t *acc, const uint32_t ip)
+src_check(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt, spa_data_t *spadat)
 {
+    acc_stanza_t *acc = opts->acc_stanzas;
+
     while (acc)
     {
-        if(compare_addr_list(acc->source_list, ip))
+        if(compare_addr_list(acc->source_list, ntohl(spa_pkt->packet_src_ip)))
             return 1;
 
         acc = acc->next;
     }
+
+    log_msg(LOG_WARNING, "No access data found for source IP: %s", spadat->pkt_source_ip);
     return 0;
 }
 
+/* Look for the SDP Client ID in the hash table
+ */
 static int
-src_check(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt,
-        spa_data_t *spadat, char **raw_digest)
+sdp_id_check(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt, acc_stanza_t **acc)
 {
-    if (is_src_match(opts->acc_stanzas, ntohl(spa_pkt->packet_src_ip)))
-    {
-        if(strncasecmp(opts->config[CONF_ENABLE_DIGEST_PERSISTENCE], "Y", 1) == 0)
-        {
-            /* Check for a replay attack
-            */
-            if(get_raw_digest(raw_digest, (char *)spa_pkt->packet_data) != FKO_SUCCESS)
-            {
-                if (*raw_digest != NULL)
-                    free(*raw_digest);
-                return 0;
-            }
-            if (*raw_digest == NULL)
-                return 0;
+    bstring sdp_id = NULL;
 
-            if (is_replay(opts, *raw_digest) != SPA_MSG_SUCCESS)
-            {
-                free(*raw_digest);
-                return 0;
-            }
-        }
-    }
-    else
+    if(spa_pkt->sdp_id == 0)
     {
         log_msg(LOG_WARNING,
-            "No access data found for source IP: %s", spadat->pkt_source_ip
-        );
+                "No access data found for SDP Client ID: %"PRIu32"...obviously",
+                spa_pkt->sdp_id);
         return 0;
     }
+
+    sdp_id = bfromcstr(spa_pkt->sdp_id_str);
+    if(sdp_id == NULL)
+    {
+        log_msg(LOG_ERR, "Failed to convert sdp_id_str to bstring. Value: %s", spa_pkt->sdp_id_str);
+        return 0;
+    }
+
+    // lock the hash table mutex
+    if(pthread_mutex_lock(&(opts->acc_hash_tbl_mutex)))
+    {
+        log_msg(LOG_ERR, "Mutex lock error.");
+        return 0;
+    }
+
+    *acc = hash_table_get(opts->acc_stanza_hash_tbl, sdp_id);
+    pthread_mutex_unlock(&(opts->acc_hash_tbl_mutex));
+
+    bdestroy(sdp_id);
+    if(*acc)
+        return 1;  //found what we were looking for
+
+    log_msg(LOG_WARNING,
+        "No access data found for SDP Client ID: %"PRIu32,
+        spa_pkt->sdp_id);
+    return 0;
+}
+
+
+static int
+replay_check(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt, char **raw_digest)
+{
+    if(strncasecmp(opts->config[CONF_ENABLE_DIGEST_PERSISTENCE], "Y", 1) == 0)
+    {
+        /* Check for a replay attack
+        */
+        if(get_raw_digest(raw_digest, (char *)spa_pkt->packet_data) != FKO_SUCCESS)
+        {
+            return 0;
+        }
+        if (*raw_digest == NULL)
+            return 0;
+
+        if (is_replay(opts, *raw_digest) != SPA_MSG_SUCCESS)
+        {
+            return 0;
+        }
+    }
+
     return 1;
 }
 
 static int
 precheck_pkt(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt,
-        spa_data_t *spadat, char **raw_digest)
+        spa_data_t *spadat)
 {
     int res = 0, packet_data_len = 0;
 
@@ -389,9 +478,6 @@ precheck_pkt(fko_srv_options_t *opts, spa_pkt_info_t *spa_pkt,
         printf("[+] candidate SPA packet payload:\n");
         hex_dump(spa_pkt->packet_data, packet_data_len);
     }
-
-    if(! src_check(opts, spa_pkt, spadat, raw_digest))
-        return 0;
 
     return 1;
 }
@@ -539,36 +625,22 @@ check_mode_ctx(spa_data_t *spadat, fko_ctx_t *ctx, int attempted_decrypt,
     return 1;
 }
 
-static int
+static void
 handle_rijndael_enc(acc_stanza_t *acc, spa_pkt_info_t *spa_pkt,
         spa_data_t *spadat, fko_ctx_t *ctx, int *attempted_decrypt,
         int *cmd_exec_success, const int enc_type, const int stanza_num,
         int *res)
 {
-    if(acc->use_rijndael)
+    if(enc_type == FKO_ENCRYPTION_RIJNDAEL || acc->enable_cmd_exec)
     {
-        if(acc->key == NULL)
-        {
-            log_msg(LOG_ERR,
-                "[%s] (stanza #%d) No KEY for RIJNDAEL encrypted messages",
-                spadat->pkt_source_ip, stanza_num
-            );
-            return 0;
-        }
-
-        /* Command mode messages may be quite long
-        */
-        if(acc->enable_cmd_exec || enc_type == FKO_ENCRYPTION_RIJNDAEL)
-        {
-            *res = fko_new_with_data(ctx, (char *)spa_pkt->packet_data,
-                acc->key, acc->key_len, acc->encryption_mode, acc->hmac_key,
-                acc->hmac_key_len, acc->hmac_type);
-            *attempted_decrypt = 1;
-            if(*res == FKO_SUCCESS)
-                *cmd_exec_success = 1;
-        }
+        *res = fko_new_with_data(ctx, (char *)spa_pkt->packet_data,
+            acc->key, acc->key_len, acc->encryption_mode, acc->hmac_key,
+            acc->hmac_key_len, acc->hmac_type, spa_pkt->sdp_id);
+        *attempted_decrypt = 1;
+        if(*res == FKO_SUCCESS)
+            *cmd_exec_success = 1;
     }
-    return 1;
+    return;
 }
 
 static int
@@ -586,7 +658,7 @@ handle_gpg_enc(acc_stanza_t *acc, spa_pkt_info_t *spa_pkt,
         {
             *res = fko_new_with_data(ctx, (char *)spa_pkt->packet_data, NULL,
                     0, FKO_ENC_MODE_ASYMMETRIC, acc->hmac_key,
-                    acc->hmac_key_len, acc->hmac_type);
+                    acc->hmac_key_len, acc->hmac_type, spa_pkt->sdp_id);
 
             if(*res != FKO_SUCCESS)
             {
@@ -793,37 +865,52 @@ static int
 check_nat_access_types(fko_srv_options_t *opts, acc_stanza_t *acc,
         spa_data_t *spadat, const int stanza_num)
 {
-    if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG
-          || spadat->message_type == FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCESS_MSG
-          || spadat->message_type == FKO_NAT_ACCESS_MSG
+    int      unsupported=0, not_enabled=0;
+
+    if(spadat->message_type == FKO_NAT_ACCESS_MSG
           || spadat->message_type == FKO_CLIENT_TIMEOUT_NAT_ACCESS_MSG)
     {
 #if FIREWALL_FIREWALLD
         if(strncasecmp(opts->config[CONF_ENABLE_FIREWD_FORWARDING], "Y", 1)!=0)
-        {
-            log_msg(LOG_WARNING,
-                "(stanza #%d) SPA packet from %s requested NAT access, but is not enabled",
-                stanza_num, spadat->pkt_source_ip
-            );
-            return 0;
-        }
+            not_enabled = 1;
 #elif FIREWALL_IPTABLES
         if(strncasecmp(opts->config[CONF_ENABLE_IPT_FORWARDING], "Y", 1)!=0)
-        {
-            log_msg(LOG_WARNING,
-                "(stanza #%d) SPA packet from %s requested NAT access, but is not enabled",
-                stanza_num, spadat->pkt_source_ip
-            );
-            return 0;
-        }
+            not_enabled = 1;
 #else
+        unsupported = 1;
+#endif
+    }
+    else if(spadat->message_type == FKO_LOCAL_NAT_ACCESS_MSG
+          || spadat->message_type == FKO_CLIENT_TIMEOUT_LOCAL_NAT_ACCESS_MSG)
+    {
+#if FIREWALL_FIREWALLD
+        if(strncasecmp(opts->config[CONF_ENABLE_FIREWD_LOCAL_NAT], "Y", 1)!=0)
+            not_enabled = 1;
+#elif FIREWALL_IPTABLES
+        if(strncasecmp(opts->config[CONF_ENABLE_IPT_LOCAL_NAT], "Y", 1)!=0)
+            not_enabled = 1;
+#else
+        unsupported = 1;
+#endif
+    }
+
+    if(not_enabled)
+    {
+        log_msg(LOG_WARNING,
+            "(stanza #%d) SPA packet from %s requested NAT access, but is not enabled",
+            stanza_num, spadat->pkt_source_ip
+        );
+        return 0;
+    }
+    else if(unsupported)
+    {
         log_msg(LOG_WARNING,
             "(stanza #%d) SPA packet from %s requested unsupported NAT access",
             stanza_num, spadat->pkt_source_ip
         );
         return 0;
-#endif
     }
+
     return 1;
 }
 
@@ -861,6 +948,41 @@ set_timeout(acc_stanza_t *acc, spa_data_t *spadat)
     return;
 }
 
+
+static int
+check_service_access(acc_stanza_t *acc, spa_data_t *spadat)
+{
+    if(! acc_check_service_access(acc, spadat->spa_message_remain))
+    {
+        log_msg(LOG_WARNING,
+            "[%s] One or more requested services was denied.",
+            spadat->pkt_source_ip
+        );
+        return 0;
+    }
+    return 1;
+}
+
+
+
+static int
+gather_service_information(fko_srv_options_t *opts, spa_data_t *spadat)
+{
+    int rv = FWKNOPD_SUCCESS;
+    service_data_list_t *service_data_list = NULL;
+
+    // walk through list of requested service IDs to gather service data
+    if((rv = get_service_data_list(opts, spadat->spa_message_remain, &service_data_list)) != FWKNOPD_SUCCESS)
+    {
+        log_msg(LOG_ERR, "Failed to gather necessary data for requested services.");
+        return 0;
+    }
+
+    spadat->service_data_list = service_data_list;
+    return 1;
+}
+
+
 static int
 check_port_proto(acc_stanza_t *acc, spa_data_t *spadat, const int stanza_num)
 {
@@ -875,6 +997,281 @@ check_port_proto(acc_stanza_t *acc, spa_data_t *spadat, const int stanza_num)
     return 1;
 }
 
+/* Handle grant request
+ */
+static int
+process_spa_data(fko_srv_options_t *opts, fko_ctx_t *ctx, acc_stanza_t *acc, spa_pkt_info_t *spa_pkt, spa_data_t *spadat,
+                    int stanza_num, char *raw_digest, int conf_pkt_age)
+{
+    int res                 = FKO_SUCCESS;
+    int added_replay_digest = 0;
+    int cmd_exec_success    = 0;
+    int attempted_decrypt   = 0;
+    int enc_type            = 0;
+    char *spa_ip_demark     = NULL;
+    char dump_buf[CTX_DUMP_BUFSIZE];
+    short msg_type          = 0;
+
+    /* Check for a match for the SPA source and destination IP and the access stanza
+    */
+    if(! src_dst_check(acc, spa_pkt, spadat, stanza_num))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    log_msg(LOG_INFO,
+        "(stanza #%d) SPA Packet from IP: %s received with access source match",
+        stanza_num, spadat->pkt_source_ip);
+
+    log_msg(LOG_DEBUG, "SPA Packet: '%s'", spa_pkt->packet_data);
+
+    /* Make sure this access stanza has not expired
+    */
+    if(! check_stanza_expiration(acc, spadat, stanza_num))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* Get encryption type and try its decoding routine first (if the key
+     * for that type is set)
+    */
+    enc_type = fko_encryption_type((char *)spa_pkt->packet_data);
+
+    if(acc->use_rijndael)
+        handle_rijndael_enc(acc, spa_pkt, spadat, ctx,
+                    &attempted_decrypt, &cmd_exec_success, enc_type,
+                    stanza_num, &res);
+
+    if(! handle_gpg_enc(acc, spa_pkt, spadat, ctx, &attempted_decrypt,
+                cmd_exec_success, enc_type, stanza_num, &res))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    if(! check_mode_ctx(spadat, ctx, attempted_decrypt,
+                enc_type, stanza_num, res))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* Add this SPA packet into the replay detection cache
+    */
+    if(! add_replay_cache(opts, acc, spadat, raw_digest,
+                &added_replay_digest, stanza_num, &res))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* At this point the SPA data is authenticated via the HMAC (if used
+     * for now). Next we need to see if it meets our access criteria which
+     * the server imposes regardless of the content of the SPA packet.
+    */
+    log_msg(LOG_DEBUG, "[%s] (stanza #%d) SPA Decode (res=%i):",
+        spadat->pkt_source_ip, stanza_num, res);
+
+    res = dump_ctx_to_buffer(*ctx, dump_buf, sizeof(dump_buf));
+    if (res == FKO_SUCCESS)
+        log_msg(LOG_DEBUG, "%s", dump_buf);
+    else
+        log_msg(LOG_WARNING, "Unable to dump FKO context: %s", fko_errstr(res));
+
+    /* First, check if the SPA message type is currently permitted.
+     */
+    if((res = fko_get_spa_message_type(*ctx, &msg_type)) != FKO_SUCCESS)
+    	return STOP_SEARCHING;
+
+    if(msg_type != FKO_SERVICE_ACCESS_MSG &&
+       msg_type != FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG &&
+       msg_type != FKO_COMMAND_MSG &&
+       strncasecmp(opts->config[CONF_ALLOW_LEGACY_ACCESS_REQUESTS], "N", 1) == 0)
+    {
+        log_msg(LOG_ERR,
+                "[%s] SPA packet made legacy access request, server configured to deny.",
+                spadat->pkt_source_ip);
+        return STOP_SEARCHING;
+    }
+
+    /* Next, if this is a GPG message, and GPG_REMOTE_ID list is not empty,
+     * then we need to make sure this incoming message is signer ID matches
+     * an entry in the list.
+    */
+
+    if(! handle_gpg_sigs(acc, spadat, ctx, enc_type, stanza_num, &res))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* Populate our spa data struct for future reference.
+    */
+    res = get_spa_data_fields(*ctx, spadat);
+
+    if(res != FKO_SUCCESS)
+    {
+        log_msg(LOG_ERR,
+            "[%s] (stanza #%d) Unexpected error pulling SPA data from the context: %s",
+            spadat->pkt_source_ip, stanza_num, fko_errstr(res));
+
+        return KEEP_SEARCHING;
+    }
+
+    /* Figure out what our timeout will be. If it is specified in the SPA
+     * data, then use that.  If not, try the FW_ACCESS_TIMEOUT from the
+     * access.conf file (if there is one).  Otherwise use the default.
+    */
+    set_timeout(acc, spadat);
+
+    /* Check packet age if so configured.
+    */
+    if(! check_pkt_age(opts, spadat, stanza_num, conf_pkt_age))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* At this point, we have enough to check the embedded (or packet source)
+     * IP address against the defined access rights.  We start by splitting
+     * the spa msg source IP from the remainder of the message.
+    */
+    spa_ip_demark = strchr(spadat->spa_message, ',');
+    if(spa_ip_demark == NULL)
+    {
+        log_msg(LOG_WARNING,
+            "[%s] (stanza #%d) Error parsing SPA message string: %s",
+            spadat->pkt_source_ip, stanza_num, fko_errstr(res));
+
+        return KEEP_SEARCHING;
+    }
+
+    if((spa_ip_demark-spadat->spa_message) < MIN_IPV4_STR_LEN-1
+            || (spa_ip_demark-spadat->spa_message) > MAX_IPV4_STR_LEN)
+    {
+        log_msg(LOG_WARNING,
+            "[%s] (stanza #%d) Invalid source IP in SPA message, ignoring SPA packet",
+            spadat->pkt_source_ip, stanza_num);
+        return STOP_SEARCHING;
+    }
+
+    strlcpy(spadat->spa_message_src_ip,
+        spadat->spa_message, (spa_ip_demark-spadat->spa_message)+1);
+
+    if(! is_valid_ipv4_addr(spadat->spa_message_src_ip))
+    {
+        log_msg(LOG_WARNING,
+            "[%s] (stanza #%d) Invalid source IP in SPA message, ignoring SPA packet",
+            spadat->pkt_source_ip, stanza_num, fko_errstr(res));
+        return STOP_SEARCHING;
+    }
+
+    strlcpy(spadat->spa_message_remain, spa_ip_demark+1, MAX_DECRYPTED_SPA_LEN);
+
+    /* If use source IP was requested (embedded IP of 0.0.0.0), make sure it
+     * is allowed.
+    */
+    if(! check_src_access(acc, spadat, stanza_num))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* If SDP Mode is disabled and REQUIRE_USERNAME is set,
+     * make sure the username in this SPA data matches.
+    */
+    if(strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "Y", 1) == 0)
+    {
+        if(! check_username(acc, spadat, stanza_num))
+        {
+            return KEEP_SEARCHING;
+        }
+    }
+
+    /* Take action based on SPA message type.
+    */
+    if(! check_nat_access_types(opts, acc, spadat, stanza_num))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* Command messages.
+    */
+    if(acc->cmd_cycle_open != NULL)
+    {
+        if(cmd_cycle_open(opts, acc, spadat, stanza_num, &res))
+            return STOP_SEARCHING; /* successfully processed a matching access stanza */
+        else
+        {
+            return KEEP_SEARCHING;
+        }
+    }
+    else if(spadat->message_type == FKO_COMMAND_MSG)
+    {
+        if(process_cmd_msg(opts, acc, spadat, stanza_num, &res))
+        {
+            /* we processed the command on a matching access stanza, so we
+             * don't look for anything else to do with this SPA packet
+            */
+            return STOP_SEARCHING;
+        }
+        else
+        {
+            return KEEP_SEARCHING;
+        }
+    }
+
+    /* From this point forward, we have some kind of access message. So
+     * we first see if access is allowed by checking access against
+     * permitted services if applicable or else restrict_ports and
+     * open_ports.
+     *
+    */
+    if(msg_type == FKO_SERVICE_ACCESS_MSG ||
+       msg_type == FKO_CLIENT_TIMEOUT_SERVICE_ACCESS_MSG)
+    {
+    	log_msg(LOG_DEBUG,
+    			"[%s] --SPA message is a service access request, checking if SDP ID has necessary permissions",
+				spadat->pkt_source_ip
+		);
+        if(! check_service_access(acc, spadat))
+            return STOP_SEARCHING;
+
+        if(! gather_service_information(opts, spadat))
+        	return STOP_SEARCHING;
+    }
+    else if(! check_port_proto(acc, spadat, stanza_num))
+    {
+        return KEEP_SEARCHING;
+    }
+
+    /* At this point, we process the SPA request and break out of the
+     * access stanza loop (first valid access stanza stops us looking
+     * for others).
+    */
+    if(opts->test)  /* no firewall changes in --test mode */
+    {
+        log_msg(LOG_WARNING,
+            "[%s] (stanza #%d) --test mode enabled, skipping firewall manipulation.",
+            spadat->pkt_source_ip, stanza_num
+        );
+        return KEEP_SEARCHING;
+    }
+    else
+    {
+        if(acc->cmd_cycle_open != NULL)
+        {
+            if(cmd_cycle_open(opts, acc, spadat, stanza_num, &res))
+                return STOP_SEARCHING; /* successfully processed a matching access stanza */
+            else
+            {
+                return KEEP_SEARCHING;
+            }
+        }
+        else
+        {
+            process_spa_request(opts, acc, spadat);
+        }
+    }
+
+    return STOP_SEARCHING;
+}
+
+
 /* Process the SPA packet data
 */
 void
@@ -885,12 +1282,10 @@ incoming_spa(fko_srv_options_t *opts)
     */
     fko_ctx_t       ctx = NULL;
 
-    char            *spa_ip_demark, *raw_digest = NULL;
-    int             res, enc_type, stanza_num=0;
-    int             added_replay_digest = 0;
-    int             is_err, cmd_exec_success = 0, attempted_decrypt = 0;
+    char            *raw_digest = NULL;
+    int             stanza_num=0;
+    int             is_err;
     int             conf_pkt_age = 0;
-    char            dump_buf[CTX_DUMP_BUFSIZE];
 
     spa_pkt_info_t *spa_pkt = &(opts->spa_pkt);
 
@@ -898,9 +1293,11 @@ incoming_spa(fko_srv_options_t *opts)
     */
     spa_data_t spadat;
 
-    /* Loop through all access stanzas looking for a match
-    */
-    acc_stanza_t        *acc = opts->acc_stanzas;
+    acc_stanza_t        *acc = NULL;
+
+    log_msg(LOG_DEBUG, "incoming_spa() : just arrived, stay tuned");
+
+    spadat.service_data_list = NULL;
 
     inet_ntop(AF_INET, &(spa_pkt->packet_src_ip),
         spadat.pkt_source_ip, sizeof(spadat.pkt_source_ip));
@@ -912,8 +1309,22 @@ incoming_spa(fko_srv_options_t *opts)
      * SPA data and/or to be reasonably sure we have a SPA packet (i.e
      * try to eliminate obvious non-spa packets).
     */
-    if(!precheck_pkt(opts, spa_pkt, &spadat, &raw_digest))
-        return;
+    if(! precheck_pkt(opts, spa_pkt, &spadat))
+        goto cleanup;
+
+    if(! replay_check(opts, spa_pkt, &raw_digest))
+        goto cleanup;
+
+    if(strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "Y", 1) == 0)
+    {
+        if(! src_check(opts, spa_pkt, &spadat))
+            goto cleanup;
+    }
+    else
+    {
+        if(! sdp_id_check(opts, spa_pkt, &acc))
+            goto cleanup;
+    }
 
     if(strncasecmp(opts->config[CONF_ENABLE_SPA_PACKET_AGING], "Y", 1) == 0)
     {
@@ -922,7 +1333,7 @@ incoming_spa(fko_srv_options_t *opts)
         if(is_err != FKO_SUCCESS)
         {
             log_msg(LOG_ERR, "[*] [%s] invalid MAX_SPA_PACKET_AGE", spadat.pkt_source_ip);
-            return;
+            goto cleanup;
         }
     }
 
@@ -930,247 +1341,43 @@ incoming_spa(fko_srv_options_t *opts)
      * incoming SPA packet is not a replay, see if we should grant any
      * access
     */
-    while(acc)
+
+    if(strncasecmp(opts->config[CONF_DISABLE_SDP_MODE], "Y", 1) == 0)
     {
-        res = FKO_SUCCESS;
-        cmd_exec_success  = 0;
-        attempted_decrypt = 0;
-        stanza_num++;
-
-        /* Start access loop with a clean FKO context
+        acc = opts->acc_stanzas;
+        /* Loop through all access stanzas looking for a match
         */
-        if(ctx != NULL)
+        while(acc)
         {
-            if(fko_destroy(ctx) == FKO_ERROR_ZERO_OUT_DATA)
-                log_msg(LOG_WARNING,
-                    "[%s] (stanza #%d) fko_destroy() could not zero out sensitive data buffer.",
-                    spadat.pkt_source_ip, stanza_num
-                );
-            ctx = NULL;
-        }
+            stanza_num++;
 
-        /* Check for a match for the SPA source and destination IP and the access stanza
-        */
-        if(! src_dst_check(acc, spa_pkt, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        log_msg(LOG_INFO, "(stanza #%d) SPA Packet from IP: %s received with access source match",
-            stanza_num, spadat.pkt_source_ip);
-
-        log_msg(LOG_DEBUG, "SPA Packet: '%s'", spa_pkt->packet_data);
-
-        /* Make sure this access stanza has not expired
-        */
-        if(! check_stanza_expiration(acc, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* Get encryption type and try its decoding routine first (if the key
-         * for that type is set)
-        */
-        enc_type = fko_encryption_type((char *)spa_pkt->packet_data);
-
-        if(! handle_rijndael_enc(acc, spa_pkt, &spadat, &ctx,
-                    &attempted_decrypt, &cmd_exec_success, enc_type,
-                    stanza_num, &res))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        if(! handle_gpg_enc(acc, spa_pkt, &spadat, &ctx, &attempted_decrypt,
-                    cmd_exec_success, enc_type, stanza_num, &res))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        if(! check_mode_ctx(&spadat, &ctx, attempted_decrypt,
-                    enc_type, stanza_num, res))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* Add this SPA packet into the replay detection cache
-        */
-        if(! add_replay_cache(opts, acc, &spadat, raw_digest,
-                    &added_replay_digest, stanza_num, &res))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* At this point the SPA data is authenticated via the HMAC (if used
-         * for now). Next we need to see if it meets our access criteria which
-         * the server imposes regardless of the content of the SPA packet.
-        */
-        log_msg(LOG_DEBUG, "[%s] (stanza #%d) SPA Decode (res=%i):",
-            spadat.pkt_source_ip, stanza_num, res);
-
-        res = dump_ctx_to_buffer(ctx, dump_buf, sizeof(dump_buf));
-        if (res == FKO_SUCCESS)
-            log_msg(LOG_DEBUG, "%s", dump_buf);
-        else
-            log_msg(LOG_WARNING, "Unable to dump FKO context: %s", fko_errstr(res));
-
-        /* First, if this is a GPG message, and GPG_REMOTE_ID list is not empty,
-         * then we need to make sure this incoming message is signer ID matches
-         * an entry in the list.
-        */
-
-        if(! handle_gpg_sigs(acc, &spadat, &ctx, enc_type, stanza_num, &res))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* Populate our spa data struct for future reference.
-        */
-        res = get_spa_data_fields(ctx, &spadat);
-
-        if(res != FKO_SUCCESS)
-        {
-            log_msg(LOG_ERR, "[%s] (stanza #%d) Unexpected error pulling SPA data from the context: %s",
-                spadat.pkt_source_ip, stanza_num, fko_errstr(res));
-
-            acc = acc->next;
-            continue;
-        }
-
-        /* Figure out what our timeout will be. If it is specified in the SPA
-         * data, then use that.  If not, try the FW_ACCESS_TIMEOUT from the
-         * access.conf file (if there is one).  Otherwise use the default.
-        */
-        set_timeout(acc, &spadat);
-
-        /* Check packet age if so configured.
-        */
-        if(! check_pkt_age(opts, &spadat, stanza_num, conf_pkt_age))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* At this point, we have enough to check the embedded (or packet source)
-         * IP address against the defined access rights.  We start by splitting
-         * the spa msg source IP from the remainder of the message.
-        */
-        spa_ip_demark = strchr(spadat.spa_message, ',');
-        if(spa_ip_demark == NULL)
-        {
-            log_msg(LOG_WARNING, "[%s] (stanza #%d) Error parsing SPA message string: %s",
-                spadat.pkt_source_ip, stanza_num, fko_errstr(res));
-
-            acc = acc->next;
-            continue;
-        }
-
-        if((spa_ip_demark-spadat.spa_message) < MIN_IPV4_STR_LEN-1
-                || (spa_ip_demark-spadat.spa_message) > MAX_IPV4_STR_LEN)
-        {
-            log_msg(LOG_WARNING, "[%s] (stanza #%d) Invalid source IP in SPA message, ignoring SPA packet",
-                spadat.pkt_source_ip, stanza_num);
-            break;
-        }
-
-        strlcpy(spadat.spa_message_src_ip,
-            spadat.spa_message, (spa_ip_demark-spadat.spa_message)+1);
-
-        if(! is_valid_ipv4_addr(spadat.spa_message_src_ip))
-        {
-            log_msg(LOG_WARNING, "[%s] (stanza #%d) Invalid source IP in SPA message, ignoring SPA packet",
-                spadat.pkt_source_ip, stanza_num, fko_errstr(res));
-            break;
-        }
-
-        strlcpy(spadat.spa_message_remain, spa_ip_demark+1, MAX_DECRYPTED_SPA_LEN);
-
-        /* If use source IP was requested (embedded IP of 0.0.0.0), make sure it
-         * is allowed.
-        */
-        if(! check_src_access(acc, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* If REQUIRE_USERNAME is set, make sure the username in this SPA data
-         * matches.
-        */
-        if(! check_username(acc, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* Take action based on SPA message type.
-        */
-        if(! check_nat_access_types(opts, acc, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* Command messages.
-        */
-        if(spadat.message_type == FKO_COMMAND_MSG)
-        {
-            if(process_cmd_msg(opts, acc, &spadat, stanza_num, &res))
+            if( process_spa_data(opts, &ctx, acc, spa_pkt, &spadat, stanza_num,
+                    raw_digest, conf_pkt_age) == KEEP_SEARCHING )
             {
-                /* we processed the command on a matching access stanza, so we
-                 * don't look for anything else to do with this SPA packet
-                */
-                break;
+                if(ctx != NULL)
+                {
+                    if(fko_destroy(ctx) == FKO_ERROR_ZERO_OUT_DATA)
+                        log_msg(LOG_WARNING,
+                            "[%s] (stanza #%d) fko_destroy() could not zero out sensitive data buffer.",
+                            spadat.pkt_source_ip, stanza_num
+                        );
+                    ctx = NULL;
+                }
+
+                acc = acc->next;
             }
             else
             {
-                acc = acc->next;
-                continue;
+                break;
             }
         }
-
-        /* From this point forward, we have some kind of access message. So
-         * we first see if access is allowed by checking access against
-         * restrict_ports and open_ports.
-         *
-         *  --DSS TODO: We should add BLACKLIST support here as well.
-        */
-        if(! check_port_proto(acc, &spadat, stanza_num))
-        {
-            acc = acc->next;
-            continue;
-        }
-
-        /* At this point, we process the SPA request and break out of the
-         * access stanza loop (first valid access stanza stops us looking
-         * for others).
-        */
-        if(opts->test)  /* no firewall changes in --test mode */
-        {
-            log_msg(LOG_WARNING,
-                "[%s] (stanza #%d) --test mode enabled, skipping firewall manipulation.",
-                spadat.pkt_source_ip, stanza_num
-            );
-            acc = acc->next;
-            continue;
-        }
-        else
-        {
-            process_spa_request(opts, acc, &spadat);
-        }
-
-        /* If we made it here, then the SPA packet was processed according
-         * to a matching access.conf stanza, so we're done with this packet.
-        */
-        break;
+    }
+    else
+    {
+        process_spa_data(opts, &ctx, acc, spa_pkt, &spadat, stanza_num, raw_digest, conf_pkt_age);
     }
 
+cleanup:
     if (raw_digest != NULL)
         free(raw_digest);
 
@@ -1183,6 +1390,11 @@ incoming_spa(fko_srv_options_t *opts)
             );
         ctx = NULL;
     }
+
+	if(spadat.service_data_list != NULL)
+	{
+		free_service_data_list(spadat.service_data_list);
+	}
 
     return;
 }

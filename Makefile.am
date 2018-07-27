@@ -8,16 +8,11 @@ if WANT_SERVER
   SERVER_DIR = server
 endif
 
-if WANT_C_UNIT_TESTS
-    C_UNIT_TESTS_DIR = test/c-unit-tests
-endif
-
 SUBDIRS = \
-    lib \
     common \
+    lib \
     $(CLIENT_DIR) \
     $(SERVER_DIR) \
-    $(C_UNIT_TESTS_DIR) \
     doc
 
 EXTRA_DIST = \
@@ -75,6 +70,7 @@ EXTRA_DIST = \
     extras/ramdisk/ramdisk-create-osx.sh \
     extras/console-qr/console-qr.sh \
     extras/sanitizer/asan-build.sh \
+    extras/sanitizer/ubsan-build.sh \
     fwknop.spec \
     iphone/main.m \
     iphone/Fwknop.xcodeproj \
@@ -184,6 +180,7 @@ EXTRA_DIST = \
     test/conf/fwknoprc_gpg_hmac_sha512_key \
     test/conf/gpg_hmac_sha512_access.conf \
     test/conf/fwknoprc_hmac_sha512_base64_key \
+    test/conf/fwknoprc_hmac_multi_base64_key \
     test/conf/gpg_no_pw_hmac_sha512_access.conf \
     test/conf/ipt_no_flush_init_fwknopd.conf \
     test/conf/ipt_no_flush_exit_fwknopd.conf \
@@ -195,6 +192,15 @@ EXTRA_DIST = \
     test/conf/hmac_cmd_access.conf \
     test/conf/hmac_cmd_setuid_access.conf \
     test/conf/hmac_cmd_giduid_access.conf \
+    test/conf/hmac_cmd_open_close_cycle_access.conf \
+    test/conf/hmac_cmd_open_close_cycle_access2.conf \
+    test/conf/hmac_cmd_open_close_cycle_access3.conf \
+    test/conf/hmac_cmd_open_close_cycle_access4.conf \
+    test/conf/hmac_cmd_open_close_cycle_access5.conf \
+    test/conf/hmac_cmd_open_close_cycle_access6.conf \
+    test/conf/hmac_cmd_open_close_cycle_access7.conf \
+    test/conf/hmac_cmd_open_close_cycle_access8.conf \
+    test/conf/hmac_cmd_open_close_multi_cycle_access.conf \
     test/conf/hmac_get_key_access.conf \
     test/conf/hmac_no_b64_access.conf \
     test/conf/hmac_equal_keys_access.conf \
@@ -336,6 +342,24 @@ EXTRA_DIST = \
     test/conf/hmac_spa_destination5_access.conf \
     test/conf/spa_replay.pcap \
     test/conf/fcs_spa.pcap \
+    test/conf/sdp-ctrl-client/ca.crt \
+    test/conf/sdp-ctrl-client/ca.key \
+    test/conf/sdp-ctrl-client/ca.srl \
+    test/conf/sdp-ctrl-client/client.crt \
+    test/conf/sdp-ctrl-client/client.fwknoprc \
+    test/conf/sdp-ctrl-client/client.key \
+    test/conf/sdp-ctrl-client/client_sdp_ctrl_client.conf \
+    test/conf/sdp-ctrl-client/config.js \
+    test/conf/sdp-ctrl-client/fwknopd.conf \
+    test/conf/sdp-ctrl-client/mysql_login.conf \
+    test/conf/sdp-ctrl-client/sdp_test_cleanup.sql \
+    test/conf/sdp-ctrl-client/sdp_test_create.sql \
+    test/conf/sdp-ctrl-client/sdp_test_destroy.sql \
+    test/conf/sdp-ctrl-client/sdp_test_setup.sql \
+    test/conf/sdp-ctrl-client/server.crt \
+    test/conf/sdp-ctrl-client/server.fwknoprc \
+    test/conf/sdp-ctrl-client/server.key \
+    test/conf/sdp-ctrl-client/server_sdp_ctrl_client.conf \
     test/fko-wrapper/Makefile \
     test/fko-wrapper/fko_wrapper.c \
     test/fko-wrapper/fko_basic.c \
@@ -440,6 +464,8 @@ EXTRA_DIST = \
     test/tests/rijndael_replay_attacks.pl \
     test/tests/rijndael.pl \
     test/tests/rijndael_cmd_exec.pl \
+    test/tests/rijndael_hmac_cmd_open_close.pl \
+    test/tests/sdp.pl \
     test/hardening-check \
     test/local_spa.key \
     test/invalid.key \
@@ -459,6 +485,7 @@ EXTRA_DIST = \
     test/lcov.env \
     test/configure_max_coverage.sh \
     test/README \
+    test/c-unit-tests/README.md \
     VERSION \
     win32/config.h \
     win32/fwknop-client.vcproj \
@@ -492,6 +519,18 @@ uninstall-local:
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; then \
 		rm -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+		rm -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; \
+	fi
 
 install-exec-hook:
 	if test -d $(DESTDIR)$(sysconfdir)/fwknop; then \
@@ -509,11 +548,29 @@ install-exec-hook:
 			mv $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst $(DESTDIR)$(sysconfdir)/fwknop/access.conf; \
 		fi \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then :; \
+	else \
+		if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+			mv $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+		fi \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then :; \
+	else \
+		if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+			mv $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+		fi \
+	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf.inst; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf.inst; \
 	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/access.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf.inst; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc.inst; \
 	fi
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/fwknopd.conf; \
@@ -521,3 +578,10 @@ install-exec-hook:
 	if test -f $(DESTDIR)$(sysconfdir)/fwknop/access.conf; then \
 		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/access.conf; \
 	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate_sdp_ctrl_client.conf; \
+	fi
+	if test -f $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; then \
+		chmod 600 $(DESTDIR)$(sysconfdir)/fwknop/gate.fwknoprc; \
+	fi
+	
